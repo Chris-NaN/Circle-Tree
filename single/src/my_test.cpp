@@ -45,14 +45,9 @@ void clear_cache() {
 
 int main(int argc, char** argv)
 {
-    /*
-    ofstream outfile;
-    vector<int> random_data = CreateRandomNums(0, 1000, 50);
-    outfile.open("../my_input.txt", ios::out);
-    for (auto it = random_data.begin(); it!=random_data.end(); it++){
-        outfile<<*it<<endl;
-    }
-    */
+    
+    
+    
 
         // Parsing arguments
     int num_data = 0;
@@ -79,6 +74,18 @@ int main(int argc, char** argv)
         default:
             break;
         }
+    }
+
+    ofstream outfile;
+    vector<int> random_data = CreateRandomNums(0, num_data, num_data);
+    // vector<int> random_data;
+    // for (int i = 0; i < num_data; i++){
+    //     random_data.push_back(i);
+    // }
+
+    outfile.open(input_path, ios::out);
+    for (auto it = random_data.begin(); it!=random_data.end(); it++){
+        outfile<<*it<<endl;
     }
 
     btree *bt;

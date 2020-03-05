@@ -1,8 +1,0 @@
-root: a25c3ec0
-[0] leaf a25c3ec0 
-fitst_index: 504
-last_index: 11
-num_valid_key: 20
-K:1, V:1. K:2, V:2. K:3, V:3. K:4, V:4. K:5, V:5. K:6, V:6. K:7, V:7. K:8, V:8. K:9, V:9. K:10, V:a. K:11, V:b. K:12, V:c. K:13, V:d. K:14, V:e. K:15, V:f. K:16, V:10. K:17, V:11. K:18, V:12. K:19, V:13. K:20, V:14. Right_sibling: 0 
------------------------------------------
-total number of keys: 20

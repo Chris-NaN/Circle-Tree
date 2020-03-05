@@ -189,6 +189,7 @@ class page{
       hdr.records[1].ptr = NULL;
 
       hdr.first_index = 0;
+      hdr.num_valid_key = 1;
 
       clflush((char*)this, sizeof(page));
     }
@@ -541,7 +542,7 @@ class page{
           
           // shift the left part
 
-          if (key < hdr.records[(hdr.first_index + *num_entries / 2 - 1) % (cardinality - 1)].key){
+          if (key < hdr.records[(hdr.first_index + *num_entries / 2 - 1) & (cardinality - 1)].key){
             // insert in the left part
             // copy the leftmost_ptr first.
             // TODO: something wired here.
@@ -732,6 +733,7 @@ class page{
             page* new_root = new page((page*)this, split_key, sibling, 
                 hdr.level + 1);
             bt->setNewRoot((char *)new_root);
+            
           }
           else {
             bt->btree_insert_internal(NULL, split_key, (char *)sibling, 
