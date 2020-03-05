@@ -10,7 +10,7 @@ output = btree
 all: main
 
 main: src/test.cpp
-	g++ $(CFLAGS) -o btree src/test.cpp $(LIBS)
+	g++ $(CFLAGS) -o btree src/my_test.cpp $(LIBS)
 
 clean: 
 	rm $(output)
