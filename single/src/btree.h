@@ -26,7 +26,7 @@
 
 #define PAGESIZE 512
 
-#define CPU_FREQ_MHZ (1994)
+#define CPU_FREQ_MHZ (1566)
 #define DELAY_IN_NS (1000)
 #define CACHE_LINE_SIZE 64 
 #define QUERY_NUM 25
