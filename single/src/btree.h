@@ -546,11 +546,11 @@ class page{
             // insert in the left part
             // copy the leftmost_ptr first.
             // TODO: something wired here.
-            hdr.records[get_index(hdr.first_index - 1)].ptr = hdr.records[get_index(hdr.first_index)].ptr;
-            if (flush){
-              if((uint64_t)&(hdr.records[get_index(hdr.first_index - 1)].ptr) % CACHE_LINE_SIZE == 0) 
-                clflush((char*)&(hdr.records[get_index(hdr.first_index - 1)].ptr), sizeof(char*));
-            }
+            // hdr.records[get_index(hdr.first_index - 1)].ptr = hdr.records[get_index(hdr.first_index)].ptr;
+            // if (flush){
+            //   if((uint64_t)&(hdr.records[get_index(hdr.first_index - 1)].ptr) % CACHE_LINE_SIZE == 0) 
+            //     clflush((char*)&(hdr.records[get_index(hdr.first_index - 1)].ptr), sizeof(char*));
+            // }
 
             for(i = 0; i<*num_entries * 0.5; i++){
               int idx = (hdr.first_index + i) & (cardinality - 1);  // index = (nh.b + i) % N
@@ -588,11 +588,11 @@ class page{
             // TODO: update b_node, flush b_node;
           }else{  // shift the rifht part
             // copy the rightmost ptr firstly.
-            hdr.records[get_index(*num_entries)].ptr = hdr.records[get_index(*num_entries - 1)].ptr;
-            if (flush){
-              if((uint64_t)&(hdr.records[get_index(*num_entries)].ptr) % CACHE_LINE_SIZE == 0) 
-                clflush((char*)&(hdr.records[get_index(*num_entries)].ptr), sizeof(char*));
-            }
+            // hdr.records[get_index(*num_entries)].ptr = hdr.records[get_index(*num_entries - 1)].ptr;
+            // if (flush){
+            //   if((uint64_t)&(hdr.records[get_index(*num_entries)].ptr) % CACHE_LINE_SIZE == 0) 
+            //     clflush((char*)&(hdr.records[get_index(*num_entries)].ptr), sizeof(char*));
+            // }
 
             for(i = *num_entries - 1; i>=*num_entries * 0.5; i--){
               int idx = (hdr.first_index + i) & (cardinality - 1);  // index = (nh.b + i) % N
@@ -627,14 +627,6 @@ class page{
                 clflush((char*)&hdr.records[insert_idx],sizeof(entry));
             inserted = 1;
             // TODO: update b_node, flush b_node;
-          }
-          if(inserted==0){
-            // Q: what??
-            hdr.records[0].ptr =(char*) hdr.leftmost_ptr;
-            hdr.records[0].key = key;
-            hdr.records[0].ptr = ptr;
-            if(flush)
-              clflush((char*) &hdr.records[0], sizeof(entry)); 
           }
         }
 
@@ -680,16 +672,12 @@ class page{
             for(int i=0; i<=abs(last_index - m); ++i){
               int idx = get_index(m + i); 
               sibling->insert_key(hdr.records[idx].key, hdr.records[idx].ptr, &sibling_cnt, false);
-              hdr.records[idx].ptr = NULL;
-              hdr.records[idx].key = NULL;
             }
           }
           else{ // internal node
             for(int i=1;i<=abs(last_index - m);++i){ 
               int idx = get_index(m + i);
               sibling->insert_key(hdr.records[idx].key, hdr.records[idx].ptr, &sibling_cnt, false);
-              hdr.records[idx].ptr = NULL;
-              hdr.records[idx].key = NULL;
             }
             // TODO: have to do with the leftmost_ptr
             sibling->hdr.leftmost_ptr = (page*) hdr.records[m].ptr;
@@ -761,7 +749,7 @@ class page{
       char *t; 
       entry_key_t k;
 
-      if(hdr.leftmost_ptr == NULL) { // Search a leaf node
+      if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
         
         
         ret = NULL;
@@ -813,44 +801,58 @@ class page{
         ret = NULL;
         int first_idx = hdr.first_index;
         int last_idx = get_last_idx();
+        
         if (last_idx - first_idx > 0){   // search in contiguous space
+          ret = hdr.records[hdr.first_index].ptr;
           if (key < hdr.records[first_idx].key){
             ret = (char *)hdr.leftmost_ptr;
           }else{
-             for (int i = first_idx; i <= last_idx; i++){
-              if ( (k = hdr.records[i].key) == key){
-                if (i != first_idx && hdr.records[i-1].ptr != (t = hdr.records[i].ptr)){  // well, do not have to judge this.
-                  if (k == hdr.records[i].key){
-                    ret = t;
-                    break;
-                  }
-                }else if(i == first_idx && (t = hdr.records[first_idx].ptr) != NULL){
-                  if (k == hdr.records[first_idx].key){
-                    ret = t;
-                    break;
-                  }
-                }
+            //  for (int i = first_idx; i <= last_idx; i++){
+            //   if ( (k = hdr.records[i].key) > key){
+            //     if (i != first_idx && hdr.records[i-1].ptr != (t = hdr.records[i].ptr)){  // well, do not have to judge this.
+            //       if (k > hdr.records[i].key){
+            //         ret = t;
+            //       }else{
+            //         break;
+            //       }
+            //     }else if(i == first_idx && (t = hdr.records[first_idx].ptr) != NULL){
+            //       if (key == hdr.records[first_idx].key){
+            //         ret = t;
+            //         break;
+            //       }
+            //     }
+            //   }
+            // }   
+            for (int i = first_idx; i <= last_idx; i++){
+              if ( (k = hdr.records[i].key) > key){
+                ret = hdr.records[i].ptr;
+              }else{
+                break;
               }
-            }   
+            }
           }
           
         }else{  // search in disjointed space
           if (key < hdr.records[0].key){    // search in 'left' part
+            ret = hdr.records[hdr.first_index].ptr;
             if (key < hdr.records[first_idx].key){
               ret = (char *) hdr.leftmost_ptr;
             }else{
               for (int i = hdr.first_index; i<cardinality; i++){
-                if (hdr.records[i].key == key){
+                if (hdr.records[i].key > key){
                   ret = hdr.records[i].ptr;
+                }else{
                   break;
                 }
               }
             }
             
           }else{
+            ret = hdr.records[0].ptr;
             for (int i = 0; i<=last_idx; i++){
-              if (hdr.records[i].key == key){
+              if (hdr.records[i].key > key){
                 ret = hdr.records[i].ptr;
+              }else{
                 break;
               }
             }
@@ -865,12 +867,7 @@ class page{
             return t;
         }
 
-        if(ret) {
-          return ret;
-        }
-        else{
-          return (char *)hdr.leftmost_ptr;
-        }
+        return ret;
           
       }
 
