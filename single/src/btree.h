@@ -538,17 +538,6 @@ class page{
 					if (key < hdr.records[(hdr.first_index + (*num_entries >> 1)) & (cardinality - 1)].key){
 						// insert in the left part
 						// copy the leftmost_ptr first.
-						// TODO: something wired here.
-						/*
-            hdr.records[get_index(hdr.first_index - 1)].ptr = hdr.records[get_index(hdr.first_index)].ptr;
-						// FIXME: why do you flush this pointer? are they duplicate operations between this one and the first 
-						// left shift in the following for loop? -- wangc@2020.03.08
-						if (flush){
-							// FIXME: As mentioned in Circ-Tree paper, avoid using modulo `%'. --wangc@2020.03.08
-							if((uint64_t)&(hdr.records[get_index(hdr.first_index - 1)].ptr) % CACHE_LINE_SIZE == 0) 
-								clflush((char*)&(hdr.records[get_index(hdr.first_index - 1)].ptr), sizeof(char*));
-						}
-            */
 						// FIXME, avoid 0.5 in code. Use integers. -- wangc@2020.03.08
 						for(i = 0; i<(*num_entries >> 1); i++){
 							int idx = (hdr.first_index + i) & (cardinality - 1);  // index = (nh.b + i) % N
@@ -582,11 +571,6 @@ class page{
 						// TODO: update b_node, flush b_node;
 					}else{  // shift the right part
 						// copy the rightmost ptr firstly.
-						// hdr.records[get_index(*num_entries)].ptr = hdr.records[get_index(*num_entries - 1)].ptr;
-						// if (flush){
-						// 	if((uint64_t)&(hdr.records[get_index(*num_entries)].ptr) % CACHE_LINE_SIZE == 0) 
-						// 		clflush((char*)&(hdr.records[get_index(*num_entries)].ptr), sizeof(char*));
-						// }
 
 						for(i = *num_entries - 1; i>=(*num_entries >> 1); i--){
 							int idx = (hdr.first_index + i) & (cardinality - 1);  // index = (nh.b + i) % N
