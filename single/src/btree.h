@@ -117,7 +117,7 @@ class entry{
 		friend class btree;
 };
 
-const int cardinality = 512;
+const int cardinality = 32;
 
 class header{
 	private:
@@ -528,7 +528,7 @@ class page{
 				}
 				else {
 					// TODO: wired here. Have to know the usage of these code.
-					int i = *num_entries - 1, inserted = 0, to_flush_cnt = 0;
+					int i = *num_entries - 1;
 
 					// circle tree insertion
 					// need optimization
@@ -566,10 +566,7 @@ class page{
 										 && ((remainder+sizeof(entry))&(CACHE_LINE_SIZE - 1))!=0);
 									if(do_flush) {
 										clflush((char*)(&hdr.records[insert_idx]),CACHE_LINE_SIZE);
-										to_flush_cnt = 0;
 									}
-									else
-										++to_flush_cnt;  // wtf this do?
 								}
 							} else {
 								break;
@@ -581,7 +578,6 @@ class page{
 						hdr.records[insert_idx].ptr = ptr;
 						if(flush)
 							clflush((char*)&hdr.records[insert_idx], sizeof(entry));
-						inserted = 1;
 						is_left = true;
 						// TODO: update b_node, flush b_node;
 					}else{  // shift the right part
@@ -608,10 +604,8 @@ class page{
 										 && ((remainder+sizeof(entry))&(CACHE_LINE_SIZE - 1))!=0);
 									if(do_flush) {
 										clflush((char*)(&hdr.records[insert_idx]),CACHE_LINE_SIZE);
-										to_flush_cnt = 0;
+									
 									}
-									else
-										++to_flush_cnt;
 								}
 							}else{
 								break;
@@ -623,7 +617,6 @@ class page{
 						hdr.records[insert_idx].ptr = ptr;
 						if(flush)
 							clflush((char*)&hdr.records[insert_idx],sizeof(entry));
-						inserted = 1;
 						// TODO: update b_node, flush b_node;
 					}
 				}
@@ -695,6 +688,7 @@ class page{
 					clflush((char *)sibling, sizeof(page));
 
 					hdr.right_sibling_ptr = sibling;
+					
 					clflush((char*) &hdr, sizeof(hdr));
 
 					// set to nullptr
@@ -703,6 +697,7 @@ class page{
 
 					hdr.num_valid_key -= sibling_cnt;
 					clflush((char *)&(hdr.num_valid_key), sizeof(uint32_t));
+
 					num_entries = hdr.num_valid_key;
 
 					page *ret = nullptr;
@@ -745,20 +740,16 @@ class page{
 
     char *linear_search(entry_key_t key) {
       int i = 1;
-      uint8_t previous_switch_counter;
       char *ret = nullptr;
       char *t; 
       entry_key_t k;
 
       if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
-        
-        
-        ret = nullptr;
         int first_idx = hdr.first_index;
         int last_idx = get_last_idx();
-        if (last_idx - first_idx > 0){   // search in contiguous space
+        if (last_idx - first_idx > 0){   // search in continious space
           for (int i = first_idx; i <= last_idx; i++){
-            if ( (k = hdr.records[i].key) == key){
+            if ( hdr.records[i].key == key){
 							ret = hdr.records[i].ptr;
 							break;
             }
@@ -790,17 +781,16 @@ class page{
         return nullptr;
       }
       else { // internal node
-        ret = nullptr;
         int first_idx = hdr.first_index;
         int last_idx = get_last_idx();
         
-        if (last_idx - first_idx > 0){   // search in contiguous space
+        if (last_idx - first_idx > 0){   // search in continious space
           ret = hdr.records[hdr.first_index].ptr;
           if (key < hdr.records[first_idx].key){
             ret = (char *)hdr.leftmost_ptr;
           }else{
             for (int i = first_idx; i <= last_idx; i++){
-              if ( (k = hdr.records[i].key) > key){
+              if ( hdr.records[i].key > key){
                 ret = hdr.records[i].ptr;
               }else{
                 break;
@@ -835,7 +825,8 @@ class page{
           }
         }
         if((t = (char *)hdr.right_sibling_ptr) != nullptr) {
-          if(key >= ((page *)t)->hdr.records[((page *)t)->hdr.first_index].key)
+					page* tmp = (page*) t;
+          if(key >= tmp->hdr.records[tmp->hdr.first_index].key)
             return t;
         }
 
