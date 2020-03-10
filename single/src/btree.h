@@ -117,7 +117,7 @@ class entry{
 		friend class btree;
 };
 
-const int cardinality = 512;
+const int cardinality = 32;
 
 class header{
 	private:
@@ -645,7 +645,7 @@ class page{
 				// If this node has a sibling node,
 				if(hdr.right_sibling_ptr && (hdr.right_sibling_ptr != invalid_sibling)) {
 					// Compare this key with the first key of the sibling
-					if(key > hdr.right_sibling_ptr->hdr.records[hdr.first_index].key) {
+					if(key > hdr.right_sibling_ptr->hdr.records[hdr.right_sibling_ptr->hdr.first_index].key) {
 						return hdr.right_sibling_ptr->store(bt, nullptr, key, right, 
 								true, invalid_sibling);
 					}
@@ -669,7 +669,7 @@ class page{
 					int sibling_cnt = 0;
 					int last_index = get_last_idx();
 					// !!!: how much element needed to be move?
-					int move_num = (m < last_index) ? (last_index - m) : (512 - m + last_index);
+					int move_num = (m < last_index) ? (last_index - m) : (cardinality - m + last_index);
 					if (hdr.leftmost_ptr == nullptr) { // leaf node
 						for (int i=0; i<=move_num; ++i) {
 							int idx = get_index(m + i); 
@@ -866,7 +866,7 @@ class page{
         printf("V:%x. ",hdr.records[idx].ptr);
       }
         
-
+			printf("\n");
       printf("Right_sibling: %x ", hdr.right_sibling_ptr);
 
       printf("\n");

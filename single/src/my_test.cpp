@@ -77,9 +77,9 @@ int main(int argc, char** argv)
     }
 
     // ofstream outfile;
-    // vector<int> random_data = CreateRandomNums(0, num_data, num_data);
+    // vector<int> random_data = CreateRandomNums(1, num_data+1, num_data);
     // // vector<int> random_data;
-    // // for (int i = 0; i < num_data; i++){
+    // // for (int i = 1; i < num_data+1; i++){
     // //     random_data.push_back(i);
     // // }
 
@@ -90,6 +90,7 @@ int main(int argc, char** argv)
 
     btree *bt;
     bt = new btree();
+    struct timespec start, end;
 
     // Reading data
     entry_key_t* keys = new entry_key_t[num_data];
@@ -108,11 +109,46 @@ int main(int argc, char** argv)
 
     ifs.close();
 
-    for(int i = 0; i < num_data; ++i) {
+    {
+        clock_gettime(CLOCK_MONOTONIC,&start);
+
+        for(int i = 0; i < num_data; ++i) {
         bt->btree_insert(keys[i], (char *)keys[i]); 
+        }
+
+        clock_gettime(CLOCK_MONOTONIC,&end);
+
+        long long elapsed_time = 
+        (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
+        elapsed_time /= 1000;
+
+        printf("INSERT elapsed_time: %ld, Avg: %f\n", elapsed_time,
+            (double)elapsed_time / num_data);
+    }
+
+    clear_cache();
+
+    {
+    clock_gettime(CLOCK_MONOTONIC,&start);
+
+    for(int i = 0; i < num_data; ++i) {
+        bt->btree_search(keys[i]);
+    }
+
+    clock_gettime(CLOCK_MONOTONIC,&end);
+
+    long long elapsed_time = 
+        (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
+    elapsed_time /= 1000;
+
+    printf("SEARCH elapsed_time: %ld, Avg: %f\n", elapsed_time,
+        (double)elapsed_time / num_data);
     }
 
     bt->printAll();
+
+    
+
 
     delete bt;
     delete[] keys;
