@@ -530,21 +530,12 @@ class page{
 					// TODO: wired here. Have to know the usage of these code.
 					int i = *num_entries - 1, inserted = 0, to_flush_cnt = 0;
 
-					/*
-					   records[*num_entries+1].ptr = records[*num_entries].ptr; 
-					// TODO: mantain flush operation
-					if(flush) {
-					if((uint64_t)&(records[*num_entries+1].ptr) % CACHE_LINE_SIZE == 0) 
-					clflush((char*)&(records[*num_entries+1].ptr), sizeof(char*));
-					}
-					 */
-
 					// circle tree insertion
 					// need optimization
 
 					// shift the left part
 					// FIXME, do not use division like "*num_entries / 2". It is slow. Replace with bit shift. -- wangc@2020.03.08
-					if (key < hdr.records[(hdr.first_index + (*num_entries >> 1) - 1) & (cardinality - 1)].key){
+					if (key < hdr.records[(hdr.first_index + (*num_entries >> 1)) & (cardinality - 1)].key){
 						// insert in the left part
 						// copy the leftmost_ptr first.
 						// TODO: something wired here.
@@ -559,7 +550,7 @@ class page{
 						}
             */
 						// FIXME, avoid 0.5 in code. Use integers. -- wangc@2020.03.08
-						for(i = 0; i<=(*num_entries >> 1); i++){
+						for(i = 0; i<(*num_entries >> 1); i++){
 							int idx = (hdr.first_index + i) & (cardinality - 1);  // index = (nh.b + i) % N
 							if (key > hdr.records[idx].key){
 								int insert_idx = (idx - 1) & (cardinality - 1);
@@ -601,7 +592,7 @@ class page{
 						// 		clflush((char*)&(hdr.records[get_index(*num_entries)].ptr), sizeof(char*));
 						// }
 
-						for(i = *num_entries - 1; i>(*num_entries >> 1); i--){
+						for(i = *num_entries - 1; i>=(*num_entries >> 1); i--){
 							int idx = (hdr.first_index + i) & (cardinality - 1);  // index = (nh.b + i) % N
 							if (key < hdr.records[idx].key){
 								int insert_idx = (idx + 1) & (cardinality - 1);
@@ -678,8 +669,9 @@ class page{
 					int sibling_cnt = 0;
 					int last_index = get_last_idx();
 					// !!!: how much element needed to be move?
+					int move_num = (m < last_index) ? (last_index - m) : (512 - m + last_index);
 					if (hdr.leftmost_ptr == nullptr) { // leaf node
-						for (int i=0; i<=abs(last_index - m); ++i) {
+						for (int i=0; i<=move_num; ++i) {
 							int idx = get_index(m + i); 
 							sibling->insert_key(hdr.records[idx].key, hdr.records[idx].ptr, &sibling_cnt, false);
 							// MARK
@@ -688,7 +680,7 @@ class page{
 						}
 					}
 					else{ // internal node
-						for(int i=1;i<=abs(last_index - m);++i){ 
+						for(int i=1;i<=move_num;++i){ 
 							int idx = get_index(m + i);
 							sibling->insert_key(hdr.records[idx].key, hdr.records[idx].ptr, &sibling_cnt, false);
 							hdr.records[idx].ptr = nullptr;
@@ -767,17 +759,8 @@ class page{
         if (last_idx - first_idx > 0){   // search in contiguous space
           for (int i = first_idx; i <= last_idx; i++){
             if ( (k = hdr.records[i].key) == key){
-              if (i != first_idx && hdr.records[i-1].ptr != (t = hdr.records[i].ptr)){  // well, do not have to judge this.
-                if (k == hdr.records[i].key){
-                  ret = t;
-                  break;
-                }
-              }else if(i == first_idx && (t = hdr.records[first_idx].ptr) != nullptr){
-                if (k == hdr.records[first_idx].key){
-                  ret = t;
-                  break;
-                }
-              }
+							ret = hdr.records[i].ptr;
+							break;
             }
           }
         }else{  // search in disjointed space
