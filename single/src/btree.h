@@ -117,7 +117,7 @@ class entry{
 		friend class btree;
 };
 
-const int cardinality = 32;
+const int cardinality = 512;
 
 class header{
 	private:
