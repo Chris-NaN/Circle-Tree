@@ -837,7 +837,7 @@ class page{
           if (key < data.key){
             ret = (char *)hdr.leftmost_ptr;
           }else{
-            for (int i = first_idx; i <= last_idx; i++){
+            for (int i = first_idx; i <= last_idx; ++i){
 							data = hdr.records[i];
               if ( data.key > key){
                 ret = data.ptr;
@@ -854,7 +854,7 @@ class page{
             if (key < data.key){
               ret = (char *) hdr.leftmost_ptr;
             }else{
-              for (int i = first_idx; i<cardinality; i++){
+              for (int i = first_idx; i<cardinality; ++i){
 								data = hdr.records[i];
                 if (data.key > key){
                   ret = data.ptr;
@@ -885,17 +885,9 @@ class page{
         return ret;
       }
       else { // leaf node
-        if (last_idx - first_idx > 0){   // search in continious space
-          for (int i = first_idx; i <= last_idx; i++){
-						data = hdr.records[i];
-            if ( data.key == key){
-							ret = data.ptr;
-							break;
-            }
-        }
-        }else{  // search in disjointed space
-          if (key < hdr.records[0].key){    // search in 'left' part
-            for (int i = first_idx; i<cardinality; i++){
+        if (last_idx - first_idx < 0){  // search in disjointed space
+          if (key >= hdr.records[0].key){    // search in 'left' part
+            for (int i = 0; i<=last_idx; ++i){
 							data = hdr.records[i];
               if (data.key == key){
                 ret = data.ptr;
@@ -903,7 +895,7 @@ class page{
               }
             }
           }else{
-            for (int i = 0; i<=last_idx; i++){
+						for (int i = first_idx; i<cardinality; ++i){
 							data = hdr.records[i];
               if (data.key == key){
                 ret = data.ptr;
@@ -911,6 +903,14 @@ class page{
               }
             }
           }
+        }else{  // search in continious space
+					for (int i = first_idx; i <= last_idx; i++){
+						data = hdr.records[i];
+            if ( data.key == key){
+							ret = data.ptr;
+							break;
+            }
+        	}
         }
         if(ret) {
           return ret;
@@ -919,7 +919,7 @@ class page{
         if((t = (char *)hdr.right_sibling_ptr)){
 					page* tmp = (page*) t;
 					if (key >= (tmp)->hdr.records[(tmp)->hdr.first_index].key)
-					return t;			
+						return t;			
 				} 
 
         return nullptr;  
