@@ -215,8 +215,8 @@ class page{
 
 
 		bool remove_key(entry_key_t key) {
-			int last_index = get_last_idx();
-			uint32_t del_idx = 0;
+		  int last_index = get_last_idx();
+		  uint32_t del_idx = 0;
 
 			// The key under deletion falls inside LN;
 			bool shift = false;
