@@ -215,28 +215,8 @@ class page{
 
 
 		bool remove_key(entry_key_t key) {
-			int last_index = (hdr.first_index + hdr.num_valid_key - 1) & (cardinality - 1);
+			int last_index = get_last_idx();
 			uint32_t del_idx = 0;
-			if (key == hdr.records[hdr.first_index].key){
-				del_idx = hdr.first_index;
-				char* tmp_ptr = hdr.records[del_idx].ptr;
-
-				hdr.records[del_idx].ptr = (char *)hdr.leftmost_ptr;  // copy the left ptr
-				// set the KV to nullptr
-		//		hdr.records[del_idx].key = 0; // FIXME: I do not think we need to clear keys, huh? -- wangc@2020.03.08
-				hdr.records[del_idx].ptr = nullptr;
-				// set the leftmot_ptr into sibling one.
-				hdr.leftmost_ptr = (page*)tmp_ptr;
-				clflush((char *) (uint64_t)(&hdr.records[del_idx]), CACHE_LINE_SIZE);
-				return true;
-			}else{
-				del_idx = (hdr.first_index + hdr.num_valid_key - 1) & (cardinality - 1);
-				hdr.records[del_idx].ptr = hdr.records[(del_idx-1) & (cardinality - 1)].ptr;
-		//		hdr.records[del_idx].key = 0; 
-				hdr.records[del_idx].ptr = nullptr;
-				clflush((char *) (uint64_t)(&hdr.records[del_idx]), CACHE_LINE_SIZE);
-				return true;
-			}
 
 			// The key under deletion falls inside LN;
 			bool shift = false;
@@ -244,8 +224,9 @@ class page{
 			int i;
 
 			register int m = (hdr.first_index+(int)ceil(hdr.num_valid_key/2)) & (cardinality - 1);
+			int move_num = (m < last_index) ? (last_index - m) : (cardinality - m + last_index);
 			if (key < hdr.records[m].key){ // deletion in left part
-				for(i = hdr.num_valid_key / 2 - 1; i>=0; --i) {
+				for(i = (hdr.num_valid_key >> 1) - 1; i>=0; --i) {
 					uint32_t idx = (hdr.first_index + i) & (cardinality - 1);  // index = (nh.b + i) % N
 					// TODO: something wrong about leftmost_ptr
 					if(!shift && hdr.records[idx].key == key) {
@@ -257,25 +238,24 @@ class page{
 					}
 
 					if(shift) {
-						if (idx == hdr.first_index) 
-							hdr.leftmost_ptr = (page*)hdr.records[idx].ptr; // change the leftmost_ptr
-						hdr.records[idx].key = (idx==hdr.first_index) ? 0 : hdr.records[(idx - 1)&(cardinality - 1)].key;
-						hdr.records[idx].ptr = (idx==hdr.first_index)? nullptr : hdr.records[(idx - 1)&(cardinality - 1)].ptr;
+						int prev_idx = get_index(idx-1);
+						hdr.records[idx].key = (idx==hdr.first_index) ? hdr.records[idx].key : hdr.records[prev_idx].key;
+						hdr.records[idx].ptr = (idx==hdr.first_index)? nullptr : hdr.records[prev_idx].ptr;
 
 						// flush
 						uint64_t records_ptr = (uint64_t)(&hdr.records[idx]);
-						int remainder = records_ptr % CACHE_LINE_SIZE;
+						int remainder = records_ptr & (CACHE_LINE_SIZE - 1);
 						//Q: how??
 						bool do_flush = (remainder == 0) || 
 							((((int)(remainder + sizeof(entry)) / CACHE_LINE_SIZE) == 1) && 
-							 ((remainder + sizeof(entry)) % CACHE_LINE_SIZE) != 0);
+							 ((remainder + sizeof(entry)) & (CACHE_LINE_SIZE - 1)) != 0);
 						if(do_flush) {
 							clflush((char *)records_ptr, CACHE_LINE_SIZE);
 						}
 					}
 				}
 			}else{ // del in right part
-				for(i = (hdr.num_valid_key) / 2; i < hdr.num_valid_key; ++i) {
+				for(i = (hdr.num_valid_key) >> 1; i < hdr.num_valid_key; ++i) {
 					uint32_t idx = (hdr.first_index + i) & (cardinality - 1);  // index = (nh.b + i) % N
 					if(!shift && hdr.records[idx].key == key) {
 						// the key in the first_position is going to be removed.
@@ -285,19 +265,17 @@ class page{
 					}
 
 					if(shift) {
-						int last_idx = (hdr.first_index + hdr.num_valid_key - 1) & (cardinality - 1);
-						if (idx == hdr.first_index)
-							hdr.leftmost_ptr = (page*)hdr.records[idx].ptr; // change the leftmost_ptr
-						hdr.records[idx].key = (idx==last_idx)? 0 : hdr.records[(idx + 1)&(cardinality - 1)].key;
-						hdr.records[idx].ptr = (idx==last_idx)? nullptr : hdr.records[(idx + 1)&(cardinality - 1)].ptr;
+						int next_idx = get_index(idx + 1);
+						hdr.records[idx].key = (idx==last_index)? hdr.records[idx].key : hdr.records[next_idx].key;
+						hdr.records[idx].ptr = (idx==last_index)? nullptr : hdr.records[next_idx].ptr;
 
 						// flush
 						uint64_t records_ptr = (uint64_t)(&hdr.records[idx]);
-						int remainder = records_ptr % CACHE_LINE_SIZE;
+						int remainder = records_ptr & (CACHE_LINE_SIZE - 1);
 						//Q: how??
 						bool do_flush = (remainder == 0) || 
 							((((int)(remainder + sizeof(entry)) / CACHE_LINE_SIZE) == 1) && 
-							 ((remainder + sizeof(entry)) % CACHE_LINE_SIZE) != 0);
+							 ((remainder + sizeof(entry)) & (CACHE_LINE_SIZE - 1)) != 0);
 						if(do_flush) {
 							clflush((char *)records_ptr, CACHE_LINE_SIZE);
 						}
@@ -372,7 +350,7 @@ class page{
 			entry_key_t parent_key;
 
 			if(total_num_entries > cardinality - 1) { // Redistribution
-				register int m = (int) ceil(total_num_entries / 2);
+				register int m = (int) ceil(total_num_entries >> 1);
 
 				if(num_entries < left_num_entries) { // left -> right
 					if(hdr.leftmost_ptr == nullptr){
@@ -424,67 +402,9 @@ class page{
 						bt->btree_insert_internal
 							((char *)left_sibling, parent_key, (char *)this, hdr.level + 1);
 					}
-				}else{ // from leftmost case        // right -> left?
-					hdr.is_deleted = 1;
-					clflush((char *)&(hdr.is_deleted), sizeof(uint8_t));
-
-					page* new_sibling = new page(hdr.level); 
-					new_sibling->hdr.right_sibling_ptr = hdr.right_sibling_ptr;
-
-					int num_dist_entries = num_entries - m;
-					int new_sibling_cnt = 0;
-
-					if(hdr.leftmost_ptr == nullptr){
-						for(int i=0; i<num_dist_entries; i++){
-							left_sibling->insert_key(hdr.records[i].key, hdr.records[i].ptr,
-									&left_num_entries); 
-						} 
-
-						for(int i=num_dist_entries; hdr.records[i].ptr != nullptr; i++){
-							new_sibling->insert_key(hdr.records[i].key, hdr.records[i].ptr,
-									&new_sibling_cnt, false); 
-						} 
-
-						clflush((char *)(new_sibling), sizeof(page));
-
-						left_sibling->hdr.right_sibling_ptr = new_sibling;
-						clflush((char *)&(left_sibling->hdr.right_sibling_ptr), sizeof(page *));
-
-						parent_key = new_sibling->hdr.records[0].key; 
-					}
-					else{
-						left_sibling->insert_key(deleted_key_from_parent,
-								(char*)hdr.leftmost_ptr, &left_num_entries);
-
-						for(int i=0; i<num_dist_entries - 1; i++){
-							left_sibling->insert_key(hdr.records[i].key, hdr.records[i].ptr,
-									&left_num_entries); 
-						} 
-
-						parent_key = hdr.records[num_dist_entries - 1].key;
-
-						new_sibling->hdr.leftmost_ptr = (page*)hdr.records[num_dist_entries - 1].ptr;
-						for(int i=num_dist_entries; hdr.records[i].ptr != nullptr; i++){
-							new_sibling->insert_key(hdr.records[i].key, hdr.records[i].ptr,
-									&new_sibling_cnt, false); 
-						} 
-						clflush((char *)(new_sibling), sizeof(page));
-
-						left_sibling->hdr.right_sibling_ptr = new_sibling;
-						clflush((char *)&(left_sibling->hdr.right_sibling_ptr), sizeof(page *));
-					}
-
-					if(left_sibling == ((page *)bt->root)) {
-						page* new_root = new page(left_sibling, parent_key, new_sibling, hdr.level + 1);
-						bt->setNewRoot((char *)new_root);
-					}
-					else {
-						bt->btree_insert_internal
-							((char *)left_sibling, parent_key, (char *)new_sibling, hdr.level + 1);
-					}
 				}
 			}
-			else {
+			else if(left_num_entries < (cardinality >> 1) && num_entries < (cardinality >> 1)){
 				// merge from left to right
 				left_sibling->hdr.is_deleted = 1;
 				clflush((char *)&(left_sibling->hdr.is_deleted), sizeof(uint8_t));
@@ -690,7 +610,7 @@ class page{
 					// migrate half of keys into the sibling
 					int sibling_cnt = 0;
 					int last_index = get_last_idx();
-					// !!!: how much element needed to be move?
+					// 
 					int move_num = (m < last_index) ? (last_index - m) : (cardinality - m + last_index);
 					if (hdr.leftmost_ptr == nullptr) { // leaf node
 						for (int i=0; i<=move_num; ++i) {

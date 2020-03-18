@@ -125,7 +125,8 @@ int main(int argc, char** argv)
         printf("INSERT elapsed_time: %ld, Avg: %f\n", elapsed_time,
             (double)elapsed_time / num_data);
     }
-
+    // bt->btree_delete(3549);
+    // bt->btree_delete(999577);
     clear_cache();
 
     {
