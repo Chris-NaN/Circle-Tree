@@ -1,0 +1,35 @@
+FAST-FAIR(pagesize = 8192, cardinality = 510)
+INSERT elapsed_time: 115838, Avg: 11.583800
+SEARCH elapsed_time: 954, Avg: 0.095400
+total number of keys: 10000
+
+INSERT elapsed_time: 1038245, Avg: 10.382450
+SEARCH elapsed_time: 18888, Avg: 0.188880
+total number of keys: 100000
+
+INSERT elapsed_time: 11086549, Avg: 11.086549
+SEARCH elapsed_time: 452356, Avg: 0.452356
+total number of keys: 1000000
+
+
+Circle-Tree: (origin search, optimization internal insertion, cardinality = 64)
+INSERT elapsed_time: 165568, Avg: 1.655680
+SEARCH elapsed_time: 93276, Avg: 0.932760
+total number of keys: 100000
+
+INSERT elapsed_time: 2190175, Avg: 2.190175
+SEARCH elapsed_time: 4081730, Avg: 4.081730
+total number of keys: 1000000
+
+Circle-Tree: (origin search, optimization internal insertion, cardinality = 512)
+INSERT elapsed_time: 71202, Avg: 7.120200
+SEARCH elapsed_time: 20834, Avg: 2.083400
+total number of keys: 10000
+
+INSERT elapsed_time: 704483, Avg: 7.044830
+SEARCH elapsed_time: 2283082, Avg: 22.830820
+total number of keys: 100000
+
+INSERT elapsed_time: 8848831, Avg: 8.848831
+SEARCH elapsed_time: 70919252, Avg: 70.919252
+total number of keys: 1000000
