@@ -238,7 +238,7 @@ class page{
 					}
 
 					if(shift) {
-						int prev_idx = get_index(idx-1);
+					  int prev_idx = get_index(idx-1);
 						hdr.records[idx].key = (idx==hdr.first_index) ? hdr.records[idx].key : hdr.records[prev_idx].key;
 						hdr.records[idx].ptr = (idx==hdr.first_index)? nullptr : hdr.records[prev_idx].ptr;
 
@@ -1003,7 +1003,7 @@ void btree::btree_delete_internal
 	int last_index = p->get_last_idx();
 	for(int i=p->hdr.first_index; i <= last_index; i = (i + 1) & (cardinality-1)) {
 		if(p->hdr.records[i].ptr == ptr) {
-			if(i == p->hdr.first_index) {
+	    if(i == p->hdr.first_index) {
 				if((char *)p->hdr.leftmost_ptr != p->hdr.records[i].ptr) {
 					*deleted_key = p->hdr.records[i].key;
 					*left_sibling = p->hdr.leftmost_ptr;
