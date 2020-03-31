@@ -23,6 +23,7 @@
 #include <climits>
 #include <future>
 #include <mutex>
+#include <pthread.h>
 
 #define PAGESIZE 512
 
@@ -158,6 +159,7 @@ class header{
 		}
 
 		~header() {
+			delete[] records;
 		}
 };
 
@@ -220,7 +222,6 @@ class page{
 		bool remove_key(entry_key_t key) {
 			int last_index = get_last_idx();
 
-
 			// The key under deletion falls inside LN;
 			bool shift = false;
 			bool is_left = false;
@@ -241,7 +242,7 @@ class page{
 					}
 
 					if(shift) {
-					  int prev_idx = get_index(idx-1);
+						int prev_idx = get_index(idx-1);
 						hdr.records[idx].key = (idx==hdr.first_index) ? hdr.records[idx].key : hdr.records[prev_idx].key;
 						hdr.records[idx].ptr = (idx==hdr.first_index)? nullptr : hdr.records[prev_idx].ptr;
 
@@ -320,7 +321,7 @@ class page{
 
 				bool should_rebalance = true;
 				// check the node utilization
-				if(num_entries_before - 1 >= (int)((cardinality - 1)>>1)) { 
+				if(num_entries_before - 1 >= (int)((cardinality - 1)*0.5)) { 
 					should_rebalance = false;
 				}
 
@@ -340,14 +341,14 @@ class page{
 			// return true;
 			bt->btree_delete_internal(key, (char *)this, hdr.level + 1,
 					&deleted_key_from_parent, &is_leftmost_node, &left_sibling, &left_left_sibling);
-			return true;
+			// return true;
 			if(is_leftmost_node) {
 				// Q: get it! The key from parent node is setted by the first KV of the right sibling node.
 				// need to delete key from parent node to and merge
-				return true;
-				// hdr.right_sibling_ptr->remove(bt, hdr.right_sibling_ptr->hdr.records[hdr.right_sibling_ptr->hdr.first_index].key, true,
-				// 		with_lock);
 				// return true;
+				hdr.right_sibling_ptr->remove(bt, hdr.right_sibling_ptr->hdr.records[hdr.right_sibling_ptr->hdr.first_index].key, true,
+						with_lock);
+				return true;
 			}
 			
 			register int num_entries = count();
@@ -360,6 +361,7 @@ class page{
 
 			entry_key_t parent_key;
 
+			/*
 			if(total_num_entries > cardinality - 1) { // Redistribution
 				register int m = (int) ceil(total_num_entries >> 1);
 
@@ -415,7 +417,9 @@ class page{
 					}
 				}
 			}
-			else if(left_num_entries < (cardinality >> 1) && num_entries < (cardinality >> 1)){
+			else if
+			*/
+			if(left_num_entries < (int)((cardinality-1) *0.5) && num_entries < (int)((cardinality-1) *0.5)){
 				// merge from left to right
 				// return true;
 				left_sibling->hdr.is_deleted = 1;
@@ -436,8 +440,13 @@ class page{
 					left_left_sibling->hdr.right_sibling_ptr = this;
 					clflush((char *)&(left_left_sibling->hdr.right_sibling_ptr), sizeof(page *));	
 				}
+				
 				delete left_sibling;
 				
+			}else{
+
+				// bt->btree_insert_internal
+        //       ((char *)left_sibling, deleted_key_from_parent, (char *)this, hdr.level + 1);
 			}
 
 			return true;
@@ -487,7 +496,7 @@ class page{
 								hdr.records[i+1].key = key;
 								hdr.records[i+1].ptr = ptr;
 								if(flush)
-                	clflush((char*)&hdr.records[i+1],sizeof(entry));
+									clflush((char*)&hdr.records[i+1],sizeof(entry));
 								inserted = 1;
 								break;
 							}
@@ -522,7 +531,7 @@ class page{
 										int remainder = records_ptr & (CACHE_LINE_SIZE - 1);
 										bool do_flush = (remainder == 0) || 
 											((((int)(remainder + sizeof(entry)) / CACHE_LINE_SIZE) == 1) 
-											&& ((remainder+sizeof(entry))&(CACHE_LINE_SIZE - 1))!=0);
+											 && ((remainder+sizeof(entry))&(CACHE_LINE_SIZE - 1))!=0);
 										if(do_flush) {
 											clflush((char*)(&hdr.records[insert_idx]),CACHE_LINE_SIZE);
 										}
@@ -556,10 +565,10 @@ class page{
 										int remainder = records_ptr & (CACHE_LINE_SIZE - 1);
 										bool do_flush = (remainder == 0) || 
 											((((int)(remainder + sizeof(entry)) / CACHE_LINE_SIZE) == 1) 
-											&& ((remainder+sizeof(entry))&(CACHE_LINE_SIZE - 1))!=0);
+											 && ((remainder+sizeof(entry))&(CACHE_LINE_SIZE - 1))!=0);
 										if(do_flush) {
 											clflush((char*)(&hdr.records[insert_idx]),CACHE_LINE_SIZE);
-										
+
 										}
 									}
 								}else{
@@ -590,9 +599,9 @@ class page{
 				// important   TODO: colision here?
 				++hdr.num_valid_key;
 				if (is_left){
-          hdr.first_index = (hdr.first_index - 1) & (cardinality - 1);
-          clflush((char *)&(hdr.first_index), sizeof(uint32_t));
-        } 
+					hdr.first_index = (hdr.first_index - 1) & (cardinality - 1);
+					clflush((char *)&(hdr.first_index), sizeof(uint32_t));
+				} 
 				// FIXME, you need to flush first_index. -- wangc@2020.03.08
 			}
 
@@ -613,6 +622,7 @@ class page{
 
 				// FAST
 				if(num_entries < cardinality - 1) {
+					
 					insert_key(key, right, &num_entries, flush);
 					return this;
 				}
@@ -633,8 +643,8 @@ class page{
 							int idx = get_index(m + i); 
 							sibling->insert_key(hdr.records[idx].key, hdr.records[idx].ptr, &sibling_cnt, false);
 							// MARK
-              hdr.records[idx].ptr = nullptr;
-						//	hdr.records[idx].key = nullptr;
+							hdr.records[idx].ptr = nullptr;
+							//	hdr.records[idx].key = nullptr;
 						}
 					}
 					else{ // internal node
@@ -642,7 +652,7 @@ class page{
 							int idx = get_index(m + i);
 							sibling->insert_key(hdr.records[idx].key, hdr.records[idx].ptr, &sibling_cnt, false);
 							hdr.records[idx].ptr = nullptr;
-						//	hdr.records[idx].key = nullptr;
+							//	hdr.records[idx].key = nullptr;
 						}
 						// TODO: have to do with the leftmost_ptr
 						sibling->hdr.leftmost_ptr = (page*) hdr.records[m].ptr;
@@ -653,7 +663,7 @@ class page{
 					clflush((char *)sibling, sizeof(page));
 
 					hdr.right_sibling_ptr = sibling;
-					
+
 					clflush((char*) &hdr, sizeof(hdr));
 
 					// set to nullptr
@@ -702,209 +712,263 @@ class page{
 				while(current) {}
 
 			}
-
-    char *linear_search(entry_key_t key) {
-      char *ret = nullptr;
-      char *t; 
+	#if 0
+		char *linear_search(entry_key_t key) {
+			char *ret = nullptr;
+			char *t; 
 			entry data;
 			int first_idx = hdr.first_index;
-      int last_idx = get_last_idx();
+			int last_idx = get_last_idx();
 
 			// linear search
 			/*
-			if(hdr.leftmost_ptr != nullptr) { // Search a internal node
-				data = hdr.records[first_idx];
-				ret = data.ptr;
-				if (key < data.key){
-					ret = (char *)hdr.leftmost_ptr;
-				}else{
-					for (int i = first_idx; i <= last_idx; i++){
-						data = hdr.records[i];
-						if ( data.key > key){
-							ret = data.ptr;
-						}else{
-							break;
-						}
-					}
-				}
-        if((t = (char *)hdr.right_sibling_ptr) != nullptr) {
-					page* tmp = (page*) t;
-          if(key >= tmp->hdr.records[tmp->hdr.first_index].key)
-            return t;
-        }
+			   if(hdr.leftmost_ptr != nullptr) { // Search a internal node
+			   data = hdr.records[first_idx];
+			   ret = data.ptr;
+			   if (key < data.key){
+			   ret = (char *)hdr.leftmost_ptr;
+			   }else{
+			   for (int i = first_idx; i <= last_idx; i++){
+			   data = hdr.records[i];
+			   if ( data.key > key){
+			   ret = data.ptr;
+			   }else{
+			   break;
+			   }
+			   }
+			   }
+			   if((t = (char *)hdr.right_sibling_ptr) != nullptr) {
+			   page* tmp = (page*) t;
+			   if(key >= tmp->hdr.records[tmp->hdr.first_index].key)
+			   return t;
+			   }
 
-        return ret;
-				
-			}else{
-				for (int i = 0; i < cardinality; i++){
-					if (i == last_idx+1){
-						i = (last_idx > first_idx)? cardinality : (first_idx - 1);
-						continue;
-					}
-					data = hdr.records[i];
-					if (data.key == key){
-						ret = data.ptr;
-						break;
-					}
-				}
-				if(ret) {
-          return ret;
-        }
+			   return ret;
 
-        if((t = (char *)hdr.right_sibling_ptr)){
-					page* tmp = (page*) t;
-					if (key >= (tmp)->hdr.records[(tmp)->hdr.first_index].key)
-					return t;			
-				} 
+			   }else{
+			   for (int i = 0; i < cardinality; i++){
+			   if (i == last_idx+1){
+			   i = (last_idx > first_idx)? cardinality : (first_idx - 1);
+			   continue;
+			   }
+			   data = hdr.records[i];
+			   if (data.key == key){
+			   ret = data.ptr;
+			   break;
+			   }
+			   }
+			   if(ret) {
+			   return ret;
+			   }
 
-        return nullptr;
-			}
-			return nullptr;
-			*/
+			   if((t = (char *)hdr.right_sibling_ptr)){
+			   page* tmp = (page*) t;
+			   if (key >= (tmp)->hdr.records[(tmp)->hdr.first_index].key)
+			   return t;			
+			   } 
+
+			   return nullptr;
+			   }
+			   return nullptr;
+			 */
 
 			// origin way
 			//
 			//
 			//
-      if(hdr.leftmost_ptr != nullptr) { // Search a internal node
-        if (last_idx - first_idx > 0){   // search in continious space
+			if(hdr.leftmost_ptr != nullptr) { // Search a internal node
+				if (last_idx - first_idx > 0){   // search in continious space
 					data = hdr.records[first_idx];
-          ret = data.ptr;
-          if (key < data.key){
-            ret = (char *)hdr.leftmost_ptr;
-          }else{
-            for (int i = first_idx; i <= last_idx; ++i){
+					ret = data.ptr;
+					if (key < data.key){
+						ret = (char *)hdr.leftmost_ptr;
+					}else{
+						for (int i = first_idx; i <= last_idx; ++i){
 							data = hdr.records[i];
-              if ( data.key > key){
-                ret = data.ptr;
-              }else{
-                break;
-              }
-            }
-          }
-          
-        }else{  // search in disjointed space
-          if (key < hdr.records[0].key){    // search in 'left' part
-						data = hdr.records[first_idx];
-            ret = data.ptr;
-            if (key < data.key){
-              ret = (char *) hdr.leftmost_ptr;
-            }else{
-              for (int i = first_idx; i<cardinality; ++i){
-								data = hdr.records[i];
-                if (data.key > key){
-                  ret = data.ptr;
-                }else{
-                  break;
-                }
-              }
-            }
-            
-          }else{
-            ret = hdr.records[0].ptr;
-            for (int i = 0; i<=last_idx; i++){
-							data = hdr.records[i];
-              if (data.key > key){
-                ret = data.ptr;
-              }else{
-                break;
-              }
-            }
-          }
-        }
-        if((t = (char *)hdr.right_sibling_ptr) != nullptr) {
-					page* tmp = (page*) t;
-          if(key >= tmp->hdr.records[tmp->hdr.first_index].key)
-            return t;
-        }
+							if ( data.key > key){
+								ret = data.ptr;
+							}else{
+								break;
+							}
+						}
+					}
 
-        return ret;
-      }
-      else { // leaf node
-        if (last_idx - first_idx < 0){  // search in disjointed space
-          if (key >= hdr.records[0].key){    // search in 'left' part
-            for (int i = 0; i<=last_idx; ++i){
+				}else{  // search in disjointed space
+					if (key < hdr.records[0].key){    // search in 'left' part
+						data = hdr.records[first_idx];
+						ret = data.ptr;
+						if (key < data.key){
+							ret = (char *) hdr.leftmost_ptr;
+						}else{
+							for (int i = first_idx; i<cardinality; ++i){
+								data = hdr.records[i];
+								if (data.key > key){
+									ret = data.ptr;
+								}else{
+									break;
+								}
+							}
+						}
+
+					}else{
+						ret = hdr.records[0].ptr;
+						for (int i = 0; i<=last_idx; i++){
 							data = hdr.records[i];
-              if (data.key == key){
-                ret = data.ptr;
-                break;
-              }
-            }
-          }else{
+							if (data.key > key){
+								ret = data.ptr;
+							}else{
+								break;
+							}
+						}
+					}
+				}
+				if((t = (char *)hdr.right_sibling_ptr) != nullptr) {
+					page* tmp = (page*) t;
+					if(key >= tmp->hdr.records[tmp->hdr.first_index].key)
+						return t;
+				}
+
+				return ret;
+			}
+			else { // leaf node
+				if (last_idx - first_idx < 0){  // search in disjointed space
+					if (key >= hdr.records[0].key){    // search in 'left' part
+						for (int i = 0; i<=last_idx; ++i){
+							data = hdr.records[i];
+							if (data.key == key){
+								ret = data.ptr;
+								break;
+							}
+						}
+					}else{
 						for (int i = first_idx; i<cardinality; ++i){
 							data = hdr.records[i];
-              if (data.key == key){
-                ret = data.ptr;
-                break;
-              }
-            }
-          }
-        }else{  // search in continious space
+							if (data.key == key){
+								ret = data.ptr;
+								break;
+							}
+						}
+					}
+				}else{  // search in continious space
 					for (int i = first_idx; i <= last_idx; i++){
 						data = hdr.records[i];
-            if ( data.key == key){
+						if ( data.key == key){
 							ret = data.ptr;
 							break;
-            }
-        	}
-        }
-        if(ret) {
-          return ret;
-        }
+						}
+					}
+				}
+				if(ret) {
+					return ret;
+				}
 
-        if((t = (char *)hdr.right_sibling_ptr)){
+				if((t = (char *)hdr.right_sibling_ptr)){
 					page* tmp = (page*) t;
 					if (key >= (tmp)->hdr.records[(tmp)->hdr.first_index].key)
 						return t;			
 				} 
 
-        return nullptr;  
-      }
+				return nullptr;  
+			}
 
-      return nullptr;
-    }
+			return nullptr;
+		}
+	#else
+		char *linear_search(entry_key_t key) {
+                                int i = 1;
+                                char *ret = nullptr;
+                                char *t;
+                                entry_key_t k;
 
-    // print a node 
-    void print() {
-      if(hdr.leftmost_ptr == nullptr) 
-        printf("[%d] leaf %x \n", this->hdr.level, this);
-      else 
-        printf("[%d] internal %x \n", this->hdr.level, this);
+                                if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
+                                        for (i = 0; i < count(); ++i)
+                                                if (key == hdr.records[(hdr.first_index + i) & (cardinality - 1)].key) {
+                                                        ret = hdr.records[(hdr.first_index + i) & (cardinality - 1)].ptr;
+                                                        break;
+                                                }
+                                        if(ret) {
+                                                return ret;
+                                        }
+                                        if((t = (char *)hdr.right_sibling_ptr) != nullptr && key >= ((page *)t)->hdr.records[(((page *)t)->hdr).first_index].key)
+                                                return t;
 
-      printf("fitst_index: %d\n", hdr.first_index);
-      printf("last_index: %d\n", get_last_idx());
-      printf("num_valid_key: %d\n", hdr.num_valid_key);
+                                        return nullptr;
+                                }
+                                else { // internal node, which you do not have circular design. -- wangc@2020.03.22
+                                        ret = nullptr;
 
-      if(hdr.leftmost_ptr!=nullptr) 
-        printf("%x ",hdr.leftmost_ptr);
+                                        if(key < (k = hdr.records[0].key)) {
+                                                ret = (char *)hdr.leftmost_ptr;
+                                        } else {
 
-      for(int i=0; i < hdr.num_valid_key;++i){
-        int idx = get_index(hdr.first_index + i);
-        printf("K:%ld, ", hdr.records[idx].key);
-        printf("V:%x. ",hdr.records[idx].ptr);
-      }
-        
+                                                for(i = 1; i < count(); ++i) {
+                                                        if(key < (k = hdr.records[i].key)) {
+                                                                ret = hdr.records[i - 1].ptr;
+                                                                break;
+                                                        }
+                                                }
+
+                                                if(!ret) {
+                                                        ret = hdr.records[i - 1].ptr;
+                                                }
+                                        }
+                                        if ((t = (char *)hdr.right_sibling_ptr) != nullptr) {
+                                                if(key >= ((page *)t)->hdr.records[0].key)
+                                                        return t;
+                                        }
+
+                                        if (ret) {
+                                                return ret;
+                                        } else {
+                                                return (char *)hdr.leftmost_ptr;
+                                        }
+                                }
+
+                                return nullptr;
+                        }
+	#endif
+
+		// print a node 
+		void print() {
+			if(hdr.leftmost_ptr == nullptr) 
+				printf("[%d] leaf %x \n", this->hdr.level, this);
+			else 
+				printf("[%d] internal %x \n", this->hdr.level, this);
+
+			printf("fitst_index: %d\n", hdr.first_index);
+			printf("last_index: %d\n", get_last_idx());
+			printf("num_valid_key: %d\n", hdr.num_valid_key);
+
+			if(hdr.leftmost_ptr!=nullptr) 
+				printf("%x ",hdr.leftmost_ptr);
+
+			for(int i=0; i < hdr.num_valid_key;++i){
+				int idx = get_index(hdr.first_index + i);
+				printf("K:%ld, ", hdr.records[idx].key);
+				printf("V:%x. ",hdr.records[idx].ptr);
+			}
+
 			printf("\n");
-      printf("Right_sibling: %x ", hdr.right_sibling_ptr);
+			printf("Right_sibling: %x ", hdr.right_sibling_ptr);
 
-      printf("\n");
-    }
+			printf("\n");
+		}
 
-    void printAll() {
-      if(hdr.leftmost_ptr==nullptr) {
-        printf("printing leaf node: ");
-        print();
-      }
-      else {
-        printf("printing internal node: ");
-        print();
-        ((page*) hdr.leftmost_ptr)->printAll();
-        for(int i=0;i < hdr.num_valid_key;++i){
-          int idx = get_index(hdr.first_index + i);
-          ((page*) hdr.records[idx].ptr)->printAll();
-        }
-      }
-    }
+		void printAll() {
+			if(hdr.leftmost_ptr==nullptr) {
+				printf("printing leaf node: ");
+				print();
+			}
+			else {
+				printf("printing internal node: ");
+				print();
+				((page*) hdr.leftmost_ptr)->printAll();
+				for(int i=0;i < hdr.num_valid_key;++i){
+					int idx = get_index(hdr.first_index + i);
+					((page*) hdr.records[idx].ptr)->printAll();
+				}
+			}
+		}
 };
 
 /*
@@ -1028,24 +1092,48 @@ void btree::btree_delete_internal
 					*deleted_key = p->hdr.records[idx].key;
 					page* tmp = (page*)p->hdr.records[idx].ptr;
 					*left_sibling = p->hdr.leftmost_ptr;
-					
-					p->remove(this, *deleted_key, false, false);
-					return;
-					p->set_leftmost_ptr(tmp);
+					int num_keys = (tmp)->count();
+					if (((*left_sibling)->count() < (int)((cardinality-1) *0.5) && num_keys-1 < (int)((cardinality-1) *0.5))
+					){
+						
+						p->remove(this, *deleted_key, false, false);
+						// return;
+						p->set_leftmost_ptr(tmp);
+						// if (num_keys == 0) delete tmp;
+					}else if (num_keys == 0){
+						// p->remove(this, *deleted_key, false, false);
+						// delete tmp;
+						// (*left_sibling)->hdr.right_sibling_ptr = nullptr;
+					}
 					break;
 				}
 			}
 			else {
 				int prev_idx = p->get_index(idx - 1);
 				if(p->hdr.records[prev_idx].ptr != p->hdr.records[idx].ptr) {
+					
 					*deleted_key = p->hdr.records[idx].key;
 					*left_sibling = (page *)p->hdr.records[prev_idx].ptr;
+					page* tmp = (page*)p->hdr.records[idx].ptr;
+					
 					if (prev_idx == p->hdr.first_index){
 						*left_left_sibling = p->hdr.leftmost_ptr;
 					}else{
 						*left_left_sibling = (page *)p->hdr.records[p->get_index(prev_idx - 1)].ptr;
 					}
-					p->remove(this, *deleted_key, false, false);
+					int num_keys = (tmp)->count();
+					if (((*left_sibling)->count() < (int)((cardinality-1) *0.5) && num_keys-1 < (int)((cardinality-1) *0.5) )
+					){
+						
+						p->remove(this, *deleted_key, false, false);
+						p->hdr.records[prev_idx].ptr = (char*)tmp;
+						// if (num_keys == 0) delete tmp;
+					}else if (num_keys == 0){
+						// p->remove(this, *deleted_key, false, false);
+						// delete tmp;
+						// (*left_sibling)->hdr.right_sibling_ptr = nullptr;
+					}
+					
 					break;
 				}
 			}

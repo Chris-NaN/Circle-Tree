@@ -33,14 +33,14 @@ std::vector<int> CreateRandomNums(int min,int max, int num)
 
 
 void clear_cache() {
-    // Remove cache
-    int size = 256*1024*1024;
-    char *garbage = new char[size];
-    for(int i=0;i<size;++i)
-        garbage[i] = i;
-    for(int i=100;i<size;++i)
-        garbage[i] += garbage[i-100];
-    delete[] garbage;
+	// Remove cache
+	int size = 256*1024*1024;
+	char *garbage = new char[size];
+	for(int i=0;i<size;++i)
+		garbage[i] = i;
+	for(int i=100;i<size;++i)
+		garbage[i] += garbage[i-100];
+	delete[] garbage;
 }
 
 int main(int argc, char** argv)
@@ -77,11 +77,11 @@ int main(int argc, char** argv)
     }
 
     // ofstream outfile;
-    // vector<int> random_data = CreateRandomNums(1, num_data+1, num_data);
-    // // vector<int> random_data;
-    // // for (int i = 1; i < num_data+1; i++){
-    // //     random_data.push_back(i);
-    // // }
+    // // vector<int> random_data = CreateRandomNums(1, num_data+1, num_data);
+    // vector<int> random_data;
+    // for (int i = 1; i < num_data+1; i++){
+    //     random_data.push_back(i);
+    // }
 
     // outfile.open(input_path, ios::out);
     // for (auto it = random_data.begin(); it!=random_data.end(); it++){
@@ -125,15 +125,26 @@ int main(int argc, char** argv)
         printf("INSERT elapsed_time: %ld, Avg: %f\n", elapsed_time,
             (double)elapsed_time / num_data);
     }
-    bt->btree_delete(8077);
-    bt->btree_delete(10230);
-    bt->btree_delete(580);
-    // bt->btree_delete(3549);
+    // bt->btree_delete(8077);
+    // bt->btree_delete(10230);
+    // bt->btree_delete(580);
+    // // bt->btree_delete(3549);
 
-    bt->btree_delete(260948);
-    bt->btree_delete(261289);
-    bt->btree_delete(261941);
-    bt->btree_delete(262812);
+    // bt->btree_delete(260948);
+    // bt->btree_delete(261289);
+    // bt->btree_delete(261941);
+    // bt->btree_delete(262812);
+    // 800-37
+
+    for(int i = num_data-1; i > 0; --i) {
+        bt->btree_delete(keys[i]);
+    }
+    // bt->btree_delete(256);
+    // bt->btree_delete(511);
+
+    // for(int i = 0; i<num_data; i++){
+    //     bt->btree_delete(keys[i]);
+    // }
 
     clear_cache();
 
