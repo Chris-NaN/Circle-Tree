@@ -125,16 +125,16 @@ int main(int argc, char** argv)
         printf("INSERT elapsed_time: %ld, Avg: %f\n", elapsed_time,
             (double)elapsed_time / num_data);
     }
-    // bt->btree_delete(8077);
-    // bt->btree_delete(10230);
+    // bt->btree_delete(545);
+    // bt->btree_delete(2225);
     // bt->btree_delete(580);
-    // // bt->btree_delete(3549);
+    // // // bt->btree_delete(3549);
 
-    // bt->btree_delete(260948);
+    // bt->btree_delete(260376);
     // bt->btree_delete(261289);
     // bt->btree_delete(261941);
     // bt->btree_delete(262812);
-    // 800-37
+    
 
     for(int i = num_data-1; i > 0; --i) {
         bt->btree_delete(keys[i]);

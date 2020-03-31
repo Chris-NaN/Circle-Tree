@@ -1093,7 +1093,7 @@ void btree::btree_delete_internal
 					page* tmp = (page*)p->hdr.records[idx].ptr;
 					*left_sibling = p->hdr.leftmost_ptr;
 					int num_keys = (tmp)->count();
-					if (((*left_sibling)->count() < (int)((cardinality-1) *0.5) && num_keys-1 < (int)((cardinality-1) *0.5))
+					if (((*left_sibling)->count() < (int)((cardinality-1) *0.5) && num_keys < (int)((cardinality-1) *0.5))
 					){
 						
 						p->remove(this, *deleted_key, false, false);
