@@ -23,6 +23,30 @@
 #include <climits>
 #include <future>
 #include <mutex>
+#include <pthread.h>
+
+#include <boost/atomic.hpp>
+
+class spinlock {
+private:
+  typedef enum {Locked, Unlocked} LockState;
+  boost::atomic<LockState> state_;
+
+public:
+  spinlock() : state_(Unlocked) {}
+
+  void lock()
+  {
+    while (state_.exchange(Locked, boost::memory_order_acquire) == Locked) {
+      /* busy-wait */
+    }
+  }
+  void unlock()
+  {
+    state_.store(Unlocked, boost::memory_order_release);
+  }
+};
+
 
 #define PAGESIZE 512
 
@@ -97,7 +121,7 @@ class btree{
     void btree_insert_internal(char *, entry_key_t, char *, uint32_t);
     void btree_delete(entry_key_t);
     void btree_delete_internal
-      (entry_key_t, char *, uint32_t, entry_key_t *, bool *, page **);
+			(entry_key_t, char *, uint32_t, entry_key_t *, bool *, page **, page**);
     char *btree_search(entry_key_t);
     void btree_search_range(entry_key_t, entry_key_t, unsigned long *); 
     void printAll();
@@ -135,6 +159,7 @@ class header{
 		// TODO: maybe delete switch_counter?
 		uint8_t is_deleted;         // 1 bytes
     std::mutex *mtx;      // 8 bytes
+    pthread_spinlock_t slock;
 
     friend class page;
     friend class btree;
@@ -142,6 +167,9 @@ class header{
   public:
     header() {
       mtx = new std::mutex();
+      
+      pthread_spin_init(&slock,0);
+
       records = new entry[cardinality];
 			first_index = 0;
 			num_valid_key = 0;
@@ -154,6 +182,7 @@ class header{
     ~header() {
       delete mtx;
       delete records; 
+      
     }
 };
 
@@ -204,16 +233,95 @@ class page{
 		inline int get_index(int idx) { // make it inline -- wangc@2020.03.08
 			return (idx & (cardinality - 1));
 		}
+    void set_leftmost_ptr(page* ptr){
+			this->hdr.leftmost_ptr = ptr;
+		}
 
     inline bool remove_key(entry_key_t key) {
-      return true;
+      int last_index = get_last_idx();
+
+			// The key under deletion falls inside LN;
+			bool shift = false;
+			bool is_left = false;
+			int i;
+
+			register int m = (hdr.first_index+(int)ceil(hdr.num_valid_key>>1)) & (cardinality - 1);
+			
+			if (key < hdr.records[m].key){ // deletion in left part
+				for(i = (hdr.num_valid_key >> 1) - 1; i>=0; --i) {
+					uint32_t idx = (hdr.first_index + i) & (cardinality - 1);  // index = (nh.b + i) % N
+					// TODO: something wrong about leftmost_ptr
+					if(!shift && hdr.records[idx].key == key) {
+						// the key in the first_position is going to be removed.
+						hdr.records[idx].ptr = (idx == hdr.first_index ) ? 
+							(char *)hdr.leftmost_ptr : hdr.records[(idx-1) & (cardinality - 1)].ptr;
+						shift = true;
+						is_left = true;
+					}
+
+					if(shift) {
+						int prev_idx = get_index(idx-1);
+						hdr.records[idx].key = (idx==hdr.first_index) ? hdr.records[idx].key : hdr.records[prev_idx].key;
+						hdr.records[idx].ptr = (idx==hdr.first_index)? nullptr : hdr.records[prev_idx].ptr;
+
+						// flush
+						uint64_t records_ptr = (uint64_t)(&hdr.records[idx]);
+						int remainder = records_ptr & (CACHE_LINE_SIZE - 1);
+						//Q: how??
+						bool do_flush = (remainder == 0) || 
+							((((int)(remainder + sizeof(entry)) / CACHE_LINE_SIZE) == 1) && 
+							 ((remainder + sizeof(entry)) & (CACHE_LINE_SIZE - 1)) != 0);
+						if(do_flush) {
+							clflush((char *)records_ptr, CACHE_LINE_SIZE);
+						}
+					}
+				}
+			}else{ // del in right part
+				for(i = (hdr.num_valid_key) >> 1; i < hdr.num_valid_key; ++i) {
+					uint32_t idx = (hdr.first_index + i) & (cardinality - 1);  // index = (nh.b + i) % N
+					if(!shift && hdr.records[idx].key == key) {
+						// the key in the first_position is going to be removed.
+						hdr.records[idx].ptr = (idx == hdr.first_index ) ? 
+							(char *)hdr.leftmost_ptr : hdr.records[(idx-1) & (cardinality - 1)].ptr; 
+						shift = true;
+					}
+
+					if(shift) {
+						int next_idx = get_index(idx + 1);
+						hdr.records[idx].key = (idx==last_index)? hdr.records[idx].key : hdr.records[next_idx].key;
+						hdr.records[idx].ptr = (idx==last_index)? nullptr : hdr.records[next_idx].ptr;
+
+						// flush
+						uint64_t records_ptr = (uint64_t)(&hdr.records[idx]);
+						int remainder = records_ptr & (CACHE_LINE_SIZE - 1);
+						//Q: how??
+						bool do_flush = (remainder == 0) || 
+							((((int)(remainder + sizeof(entry)) / CACHE_LINE_SIZE) == 1) && 
+							 ((remainder + sizeof(entry)) & (CACHE_LINE_SIZE - 1)) != 0);
+						if(do_flush) {
+							clflush((char *)records_ptr, CACHE_LINE_SIZE);
+						}
+					}
+				}
+			}
+			// Modify the first or last index;
+			if(shift) {
+				--hdr.num_valid_key;
+				if (is_left){
+					hdr.first_index = (hdr.first_index + 1) & (cardinality - 1);
+					clflush((char *)&(hdr.first_index), sizeof(uint32_t));
+				} 
+			}
+			return shift;
     }
 
     bool remove(btree* bt, entry_key_t key, bool only_rebalance = false, bool with_lock = true) {
       hdr.mtx->lock();
+      // pthread_spin_lock(&hdr.slock);
 
       bool ret = remove_key(key);
 
+      // pthread_spin_unlock(&hdr.slock);
       hdr.mtx->unlock();
 
       return ret;
@@ -227,6 +335,132 @@ class page{
      * international symposium on Low power electronics and design (pp. 69-74). ACM.
      */
     bool remove_rebalancing(btree* bt, entry_key_t key, bool only_rebalance = false, bool with_lock = true) {
+      if(with_lock) {
+        hdr.mtx->lock();
+      }
+      if(hdr.is_deleted) {
+        if(with_lock) {
+          hdr.mtx->unlock();
+        }
+        return false;
+      }
+      if(!only_rebalance) {
+        register int num_entries_before = count();
+
+        // This node is root
+        if(this == (page *)bt->root) {
+          if(hdr.level > 0) {
+            if(num_entries_before == 1 && !hdr.right_sibling_ptr) {
+              bt->root = (char *)hdr.leftmost_ptr;
+              clflush((char *)&(bt->root), sizeof(char *));
+
+              hdr.is_deleted = 1;
+            }
+          }
+
+          // Remove the key from this node
+          bool ret = remove_key(key);
+
+          if(with_lock) {
+            hdr.mtx->unlock();
+          }
+          return true;
+        }
+
+        bool should_rebalance = true;
+        // check the node utilization
+        if(num_entries_before - 1 >= (int)((cardinality - 1) * 0.5)) { 
+          should_rebalance = false;
+        }
+
+        // Remove the key from this node
+        bool ret = remove_key(key);
+
+        if(!should_rebalance) {
+          if(with_lock) {
+            hdr.mtx->unlock();
+          }
+          return (hdr.leftmost_ptr == NULL) ? ret : true;
+        }
+      } 
+
+      //Remove a key from the parent node
+      entry_key_t deleted_key_from_parent = 0;
+      bool is_leftmost_node = false;
+      page *left_sibling = nullptr;
+      page* left_left_sibling = nullptr;
+			// return true;
+			bt->btree_delete_internal(key, (char *)this, hdr.level + 1,
+					&deleted_key_from_parent, &is_leftmost_node, &left_sibling, &left_left_sibling);
+
+      if(is_leftmost_node) {
+        if(with_lock) {
+          hdr.mtx->unlock();
+        }
+
+        if(!with_lock) {
+          hdr.right_sibling_ptr->hdr.mtx->lock();
+        }
+        hdr.right_sibling_ptr->remove(bt, hdr.right_sibling_ptr->hdr.records[hdr.right_sibling_ptr->hdr.first_index].key, true,
+						with_lock);
+        if(!with_lock) {
+          hdr.right_sibling_ptr->hdr.mtx->unlock();
+        }
+        return true;
+      }
+
+      if(with_lock) {
+        left_sibling->hdr.mtx->lock();
+      }
+
+      while(left_sibling->hdr.right_sibling_ptr != this) {
+        if(with_lock) {
+          page *t = left_sibling->hdr.right_sibling_ptr;
+          left_sibling->hdr.mtx->unlock();
+          left_sibling = t;
+          left_sibling->hdr.mtx->lock();
+        }
+        else
+          left_sibling = left_sibling->hdr.right_sibling_ptr;
+      }
+
+      register int num_entries = count();
+      register int left_num_entries = left_sibling->count();
+
+      // Merge or Redistribution
+      int total_num_entries = num_entries + left_num_entries;
+      if(hdr.leftmost_ptr)
+        ++total_num_entries;
+
+      entry_key_t parent_key;
+
+      
+      if (left_num_entries < (int)((cardinality-1) *0.5) && num_entries < (int)((cardinality-1) *0.5)){
+        left_sibling->hdr.is_deleted = 1;
+        clflush((char *)&(left_sibling->hdr.is_deleted), sizeof(uint8_t));
+				clflush((char *)&(left_sibling->hdr.is_deleted), sizeof(uint8_t));
+				if(left_sibling->hdr.leftmost_ptr)
+					insert_key(deleted_key_from_parent, 
+							(char *)hdr.leftmost_ptr, &left_num_entries);
+				
+
+
+				for(int i = 0; i < left_sibling->hdr.num_valid_key; ++i) {
+					int idx = (left_sibling->hdr.first_index + i) & (cardinality - 1); 
+					insert_key(left_sibling->hdr.records[idx].key, left_sibling->hdr.records[idx].ptr, &num_entries);
+				}
+
+				
+				if (left_left_sibling != nullptr){
+					left_left_sibling->hdr.right_sibling_ptr = this;
+					clflush((char *)&(left_left_sibling->hdr.right_sibling_ptr), sizeof(page *));	
+				}
+      }
+      if(with_lock) {
+        left_sibling->hdr.mtx->unlock();
+        hdr.mtx->unlock();
+      }
+      // TODO: delete
       return true;
     }
 
@@ -385,11 +619,14 @@ class page{
       (btree* bt, char* left, entry_key_t key, char* right,
        bool flush, bool with_lock, page *invalid_sibling = nullptr) {
         if(with_lock) {
-          hdr.mtx->lock(); // Lock the write lock
+          // hdr.mtx->lock(); // Lock the write lock
+          pthread_spin_lock(&hdr.slock);
         }
         if(hdr.is_deleted) {
           if(with_lock) {
-            hdr.mtx->unlock();
+            // hdr.mtx->unlock();
+            pthread_spin_unlock(&hdr.slock);
+
           }
 
           return nullptr;
@@ -400,7 +637,9 @@ class page{
           // Compare this key with the first key of the sibling
           if(key > hdr.right_sibling_ptr->hdr.records[0].key) {
             if(with_lock) { 
-              hdr.mtx->unlock(); // Unlock the write lock
+              // hdr.mtx->unlock(); // Unlock the write lock
+              // hdr.slock->unlock();
+              pthread_spin_unlock(&hdr.slock);
             }
             return hdr.right_sibling_ptr->store(bt, nullptr, key, right, 
                 true, with_lock, invalid_sibling);
@@ -414,7 +653,9 @@ class page{
           insert_key(key, right, &num_entries, flush);
 
           if(with_lock) {
-            hdr.mtx->unlock(); // Unlock the write lock
+            // hdr.mtx->unlock(); // Unlock the write lock
+            // hdr.slock->unlock();
+            pthread_spin_unlock(&hdr.slock);
           }
 
           return this;
@@ -485,12 +726,16 @@ class page{
             bt->setNewRoot((char *)new_root);
 
             if(with_lock) {
-              hdr.mtx->unlock(); // Unlock the write lock
+              // hdr.mtx->unlock(); // Unlock the write lock
+              // hdr.slock->unlock();
+              pthread_spin_unlock(&hdr.slock);
             }
           }
           else {
             if(with_lock) {
-              hdr.mtx->unlock(); // Unlock the write lock
+              // hdr.mtx->unlock(); // Unlock the write lock
+              // hdr.slock->unlock();
+              pthread_spin_unlock(&hdr.slock);
             }
             bt->btree_insert_internal(nullptr, split_key, (char *)sibling, 
                 hdr.level + 1);
@@ -508,165 +753,57 @@ class page{
       }
 
     char *linear_search(entry_key_t key) {
-      char *ret = nullptr;
-      char *t; 
-			entry data;
-			int first_idx = hdr.first_index;
-      int last_idx = get_last_idx();
+                                int i = 1;
+                                char *ret = nullptr;
+                                char *t;
+                                entry_key_t k;
 
-			// linear search
-			/*
-			if(hdr.leftmost_ptr != nullptr) { // Search a internal node
-				data = hdr.records[first_idx];
-				ret = data.ptr;
-				if (key < data.key){
-					ret = (char *)hdr.leftmost_ptr;
-				}else{
-					for (int i = first_idx; i <= last_idx; i++){
-						data = hdr.records[i];
-						if ( data.key > key){
-							ret = data.ptr;
-						}else{
-							break;
-						}
-					}
-				}
-        if((t = (char *)hdr.right_sibling_ptr) != nullptr) {
-					page* tmp = (page*) t;
-          if(key >= tmp->hdr.records[tmp->hdr.first_index].key)
-            return t;
-        }
+                                if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
+                                        for (i = 0; i < count(); ++i)
+                                                if (key == hdr.records[(hdr.first_index + i) & (cardinality - 1)].key) {
+                                                        ret = hdr.records[(hdr.first_index + i) & (cardinality - 1)].ptr;
+                                                        break;
+                                                }
+                                        if(ret) {
+                                                return ret;
+                                        }
+                                        if((t = (char *)hdr.right_sibling_ptr) != nullptr && key >= ((page *)t)->hdr.records[(((page *)t)->hdr).first_index].key)
+                                                return t;
 
-        return ret;
-				
-			}else{
-				for (int i = 0; i < cardinality; i++){
-					if (i == last_idx+1){
-						i = (last_idx > first_idx)? cardinality : (first_idx - 1);
-						continue;
-					}
-					data = hdr.records[i];
-					if (data.key == key){
-						ret = data.ptr;
-						break;
-					}
-				}
-				if(ret) {
-          return ret;
-        }
+                                        return nullptr;
+                                }
+                                else { // internal node, which you do not have circular design. -- wangc@2020.03.22
+                                        ret = nullptr;
 
-        if((t = (char *)hdr.right_sibling_ptr)){
-					page* tmp = (page*) t;
-					if (key >= (tmp)->hdr.records[(tmp)->hdr.first_index].key)
-					return t;			
-				} 
+                                        if(key < (k = hdr.records[0].key)) {
+                                                ret = (char *)hdr.leftmost_ptr;
+                                        } else {
 
-        return nullptr;
-			}
-			return nullptr;
-			*/
+                                                for(i = 1; i < count(); ++i) {
+                                                        if(key < (k = hdr.records[i].key)) {
+                                                                ret = hdr.records[i - 1].ptr;
+                                                                break;
+                                                        }
+                                                }
 
-			// origin way
-			//
-			//
-			//
-      if(hdr.leftmost_ptr != nullptr) { // Search a internal node
-        if (last_idx - first_idx > 0){   // search in continious space
-					data = hdr.records[first_idx];
-          ret = data.ptr;
-          if (key < data.key){
-            ret = (char *)hdr.leftmost_ptr;
-          }else{
-            for (int i = first_idx; i <= last_idx; ++i){
-							data = hdr.records[i];
-              if ( data.key > key){
-                ret = data.ptr;
-              }else{
-                break;
-              }
-            }
-          }
-          
-        }else{  // search in disjointed space
-          if (key < hdr.records[0].key){    // search in 'left' part
-						data = hdr.records[first_idx];
-            ret = data.ptr;
-            if (key < data.key){
-              ret = (char *) hdr.leftmost_ptr;
-            }else{
-              for (int i = first_idx; i<cardinality; ++i){
-								data = hdr.records[i];
-                if (data.key > key){
-                  ret = data.ptr;
-                }else{
-                  break;
-                }
-              }
-            }
-            
-          }else{
-            ret = hdr.records[0].ptr;
-            for (int i = 0; i<=last_idx; i++){
-							data = hdr.records[i];
-              if (data.key > key){
-                ret = data.ptr;
-              }else{
-                break;
-              }
-            }
-          }
-        }
-        if((t = (char *)hdr.right_sibling_ptr) != nullptr) {
-					page* tmp = (page*) t;
-          if(key >= tmp->hdr.records[tmp->hdr.first_index].key)
-            return t;
-        }
+                                                if(!ret) {
+                                                        ret = hdr.records[i - 1].ptr;
+                                                }
+                                        }
+                                        if ((t = (char *)hdr.right_sibling_ptr) != nullptr) {
+                                                if(key >= ((page *)t)->hdr.records[0].key)
+                                                        return t;
+                                        }
 
-        return ret;
-      }
-      else { // leaf node
-        if (last_idx - first_idx < 0){  // search in disjointed space
-          if (key >= hdr.records[0].key){    // search in 'left' part
-            for (int i = 0; i<=last_idx; ++i){
-							data = hdr.records[i];
-              if (data.key == key){
-                ret = data.ptr;
-                break;
-              }
-            }
-          }else{
-						for (int i = first_idx; i<cardinality; ++i){
-							data = hdr.records[i];
-              if (data.key == key){
-                ret = data.ptr;
-                break;
-              }
-            }
-          }
-        }else{  // search in continious space
-					for (int i = first_idx; i <= last_idx; i++){
-						data = hdr.records[i];
-            if ( data.key == key){
-							ret = data.ptr;
-							break;
-            }
-        	}
-        }
-        if(ret) {
-          return ret;
-        }
+                                        if (ret) {
+                                                return ret;
+                                        } else {
+                                                return (char *)hdr.leftmost_ptr;
+                                        }
+                                }
 
-        if((t = (char *)hdr.right_sibling_ptr)){
-					page* tmp = (page*) t;
-					if (key >= (tmp)->hdr.records[(tmp)->hdr.first_index].key)
-						return t;			
-				} 
-
-        return nullptr;  
-      }
-
-      return nullptr;
-    }
+                                return nullptr;
+                        }
 
     // print a node 
     void print() {
@@ -803,22 +940,86 @@ void btree::btree_delete(entry_key_t key) {
 
 void btree::btree_delete_internal
 (entry_key_t key, char *ptr, uint32_t level, entry_key_t *deleted_key, 
- bool *is_leftmost_node, page **left_sibling) {
-  if(level > ((page *)this->root)->hdr.level)
-    return;
+ bool *is_leftmost_node, page **left_sibling, page** left_left_sibling) {
+	if(level > ((page *)this->root)->hdr.level)
+		return;
+	
+	page *p = (page*)(this->root);
 
-  page *p = (page *)this->root;
-
-  while(p->hdr.level > level) {
-    p = (page *)p->linear_search(key);
-  }
-
-  p->hdr.mtx->lock();
-
-  
-
+	while(p->hdr.level > level) {
+		p = (page *)p->linear_search(key);
+	}
+	p->hdr.mtx->lock();
+	if((char *)p->hdr.leftmost_ptr == ptr) {
+		*is_leftmost_node = true;
+    p->hdr.mtx->unlock();
+		return;
+	}
+	
+	*is_leftmost_node = false;
+	
+	int last_index = p->get_last_idx();
+	
+	for(int i=0; i < p->hdr.num_valid_key; i++) {
+		int idx = p->get_index(p->hdr.first_index + i);
+		if(p->hdr.records[idx].ptr == ptr) {
+	    if(idx == p->hdr.first_index) {
+				
+				if((char *)p->hdr.leftmost_ptr != p->hdr.records[idx].ptr) {
+					
+					*deleted_key = p->hdr.records[idx].key;
+					page* tmp = (page*)p->hdr.records[idx].ptr;
+					*left_sibling = p->hdr.leftmost_ptr;
+					int num_keys = (tmp)->count();
+					if (((*left_sibling)->count() < (int)((cardinality-1) *0.5) && num_keys < (int)((cardinality-1) *0.5))
+					){
+						
+						p->remove(this, *deleted_key, false, false);
+						// return;
+						p->set_leftmost_ptr(tmp);
+						// if (num_keys == 0) delete tmp;
+					}else if (num_keys == 0){
+						// p->remove(this, *deleted_key, false, false);
+						// delete tmp;
+						// (*left_sibling)->hdr.right_sibling_ptr = nullptr;
+					}
+					break;
+				}
+			}
+			else {
+				int prev_idx = p->get_index(idx - 1);
+				if(p->hdr.records[prev_idx].ptr != p->hdr.records[idx].ptr) {
+					
+					*deleted_key = p->hdr.records[idx].key;
+					*left_sibling = (page *)p->hdr.records[prev_idx].ptr;
+					page* tmp = (page*)p->hdr.records[idx].ptr;
+					
+					if (prev_idx == p->hdr.first_index){
+						*left_left_sibling = p->hdr.leftmost_ptr;
+					}else{
+						*left_left_sibling = (page *)p->hdr.records[p->get_index(prev_idx - 1)].ptr;
+					}
+					int num_keys = (tmp)->count();
+					if (((*left_sibling)->count() < (int)((cardinality-1) *0.5) && num_keys-1 < (int)((cardinality-1) *0.5) )
+					){
+						
+						p->remove(this, *deleted_key, false, false);
+						p->hdr.records[prev_idx].ptr = (char*)tmp;
+						// if (num_keys == 0) delete tmp;
+					}else if (num_keys == 0){
+						// p->remove(this, *deleted_key, false, false);
+						// delete tmp;
+						// (*left_sibling)->hdr.right_sibling_ptr = nullptr;
+					}
+					
+					break;
+				}
+			}
+		}
+	}
   p->hdr.mtx->unlock();
 }
+
 
 // Function to search keys from "min" to "max"
 void btree::btree_search_range
