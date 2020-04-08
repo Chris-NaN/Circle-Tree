@@ -131,6 +131,7 @@ class header{
 		// char dummy[8];              // 8 bytes
 
 		entry* records;              // 8B
+		entry* buffer_records;       // 8B
 		uint32_t first_index;         // 4B
 		uint32_t num_valid_key;        // 4B
 		// mutex here
@@ -149,6 +150,7 @@ class header{
 	public:
 		header() {
 			records = new entry[cardinality];
+			buffer_records = new entry[cardinality / CACHE_LINE_SIZE];
 			first_index = 0;
 			num_valid_key = 0;
 			leftmost_ptr = nullptr;  
@@ -160,6 +162,7 @@ class header{
 
 		~header() {
 			delete[] records;
+			delete[] buffer_records;
 		}
 };
 
@@ -178,6 +181,7 @@ class page{
 		page(uint32_t level = 0) {
 			hdr.level = level;
 			hdr.records[0].ptr = nullptr;
+			hdr.buffer_records[0].ptr = nullptr;
 		}
 
 		// this is called when tree grows
@@ -190,6 +194,10 @@ class page{
 			hdr.records[0].ptr = (char*) right;
 			hdr.records[1].ptr = nullptr;
 
+			hdr.buffer_records[0].key = key;
+			hdr.buffer_records[0].ptr = (char*) right;
+			hdr.buffer_records[1].ptr = nullptr;
+ 
 			hdr.first_index = 0;
 			hdr.num_valid_key = 1;
 
@@ -465,6 +473,10 @@ class page{
 					new_entry->ptr = (char*) ptr;
 
 					array_end->ptr = (char*)nullptr;
+
+					hdr.buffer_records[0].key = key;
+					hdr.buffer_records[0].ptr = (char*) ptr;
+
 					hdr.first_index = 0;
 
 					if(flush) { // FIXME -- wangc@2020.03.08
@@ -598,6 +610,15 @@ class page{
 				++(*num_entries);
 				// important   TODO: colision here?
 				++hdr.num_valid_key;
+
+				// update buffer record;
+				for(int i=0; i<hdr.num_valid_key; i+=64){
+					int record_idx = get_index(hdr.first_index + i);
+					int buffer_idx = i / CACHE_LINE_SIZE;
+					hdr.buffer_records[buffer_idx].key = hdr.records[record_idx].key;
+					hdr.buffer_records[buffer_idx].ptr = hdr.records[record_idx].ptr;
+				}
+
 				if (is_left){
 					hdr.first_index = (hdr.first_index - 1) & (cardinality - 1);
 					clflush((char *)&(hdr.first_index), sizeof(uint32_t));
@@ -881,46 +902,55 @@ class page{
                                 entry_key_t k;
 
                                 if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
-                                        for (i = 0; i < count(); ++i)
-                                                if (key == hdr.records[(hdr.first_index + i) & (cardinality - 1)].key) {
-                                                        ret = hdr.records[(hdr.first_index + i) & (cardinality - 1)].ptr;
-                                                        break;
-                                                }
+																				int begin_idx = 0;
+																				for (i = 1; i < count() / CACHE_LINE_SIZE; i++){
+																					if (key < hdr.buffer_records[i].key) break;
+																					begin_idx += 64;
+																				}
+                                        for (i = begin_idx; i < count(); ++i)
+																					if (key == hdr.records[(hdr.first_index + i) & (cardinality - 1)].key) {
+																						ret = hdr.records[(hdr.first_index + i) & (cardinality - 1)].ptr;
+																						break;
+																					}
                                         if(ret) {
-                                                return ret;
+																					return ret;
                                         }
                                         if((t = (char *)hdr.right_sibling_ptr) != nullptr && key >= ((page *)t)->hdr.records[(((page *)t)->hdr).first_index].key)
-                                                return t;
+																					return t;
 
                                         return nullptr;
                                 }
                                 else { // internal node, which you do not have circular design. -- wangc@2020.03.22
                                         ret = nullptr;
 
-                                        if(key < (k = hdr.records[0].key)) {
-                                                ret = (char *)hdr.leftmost_ptr;
+                                        if(key < (k = hdr.buffer_records[0].key)) {
+																					ret = (char *)hdr.leftmost_ptr;
                                         } else {
+																					int begin_idx = 1;
+																					for (int i=1; i<count()/CACHE_LINE_SIZE; i++){
+																						if (key < hdr.buffer_records[i].key) break;
+																						begin_idx += 64;
+																					}
+																					for(i = begin_idx; i < count(); ++i) {
+																						if(key < (k = hdr.records[i].key)) {
+																							ret = hdr.records[i - 1].ptr;
+																							break;
+																						}
+																					}
 
-                                                for(i = 1; i < count(); ++i) {
-                                                        if(key < (k = hdr.records[i].key)) {
-                                                                ret = hdr.records[i - 1].ptr;
-                                                                break;
-                                                        }
-                                                }
-
-                                                if(!ret) {
-                                                        ret = hdr.records[i - 1].ptr;
-                                                }
+																					if(!ret) {
+																						ret = hdr.records[i - 1].ptr;
+																					}
                                         }
                                         if ((t = (char *)hdr.right_sibling_ptr) != nullptr) {
-                                                if(key >= ((page *)t)->hdr.records[0].key)
-                                                        return t;
+																					if(key >= ((page *)t)->hdr.records[0].key)
+																						return t;
                                         }
 
                                         if (ret) {
-                                                return ret;
+																					return ret;
                                         } else {
-                                                return (char *)hdr.leftmost_ptr;
+																					return (char *)hdr.leftmost_ptr;
                                         }
                                 }
 
