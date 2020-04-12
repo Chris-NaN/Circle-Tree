@@ -49,17 +49,21 @@ INSERT elapsed_time: 6981085, Avg: 6.981085
 SEARCH elapsed_time: 530412, Avg: 0.530412
 total number of keys: 1000000
 
-Circle-Tree: add buffer_records:
+Circle-Tree: add buffer_records: (cardinality = 256)
 
-INSERT elapsed_time: 71529, Avg: 7.152900
-SEARCH elapsed_time: 596, Avg: 0.059600
+INSERT elapsed_time: 63359, Avg: 6.335900
+SEARCH elapsed_time: 5418, Avg: 0.541800
 total number of keys: 10000
 
-INSERT elapsed_time: 653346, Avg: 6.533460
-SEARCH elapsed_time: 11388, Avg: 0.113880
+INSERT elapsed_time: 646411, Avg: 6.464110
+SEARCH elapsed_time: 13760, Avg: 0.137600
 total number of keys: 100000
 
-INSERT elapsed_time: 7047463, Avg: 7.047463
-SEARCH elapsed_time: 312478, Avg: 0.312478
+INSERT elapsed_time: 7673307, Avg: 7.673307
+SEARCH elapsed_time: 580914, Avg: 0.580914
 total number of keys: 1000000
+
+
+
+
 
