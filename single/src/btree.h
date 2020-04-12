@@ -82,6 +82,21 @@ inline void clflush(char *data, int len)
 	mfence();
 }
 
+unsigned char cal_hash(unsigned long x) 
+{
+
+	if (x > UINT_MAX) {
+		x = ((x >> 16) ^ x) * 0x45d9f3b;
+		x = ((x >> 16) ^ x) * 0x45d9f3b;
+		x = (x >> 16) ^ x;
+	} else {
+		x = (x ^ (x >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
+		x = (x ^ (x >> 27)) * UINT64_C(0x94d049bb133111eb);
+		x = x ^ (x >> 31);
+	}
+	return (unsigned char) x;
+}
+
 class page;
 
 class btree{
@@ -132,7 +147,7 @@ class header{
 		// char dummy[8];              // 8 bytes
 
 		entry* records;              // 8B
-		entry_key_t* buffer_records;       // 8B
+		unsigned char* buffer_records;       // 8B
 		uint32_t first_index;         // 4B
 		uint32_t num_valid_key;        // 4B
 		// mutex here
@@ -150,7 +165,7 @@ class header{
 	public:
 		header() {
 			records = new entry[cardinality];
-			buffer_records = new entry_key_t[cardinality / count_in_line];
+			buffer_records = new unsigned char[cardinality];
 			first_index = 0;
 			num_valid_key = 0;
 			leftmost_ptr = nullptr;  
@@ -192,7 +207,7 @@ class page{
 			hdr.records[0].ptr = (char*) right;
 			hdr.records[1].ptr = nullptr;
 
-			hdr.buffer_records[0] = key;
+			hdr.buffer_records[0] = cal_hash(key);
  
 			hdr.first_index = 0;
 			hdr.num_valid_key = 1;
@@ -470,7 +485,7 @@ class page{
 
 					array_end->ptr = (char*)nullptr;
 
-					hdr.buffer_records[0] = key;
+					hdr.buffer_records[0] = cal_hash(key);
 
 					hdr.first_index = 0;
 
@@ -487,6 +502,9 @@ class page{
 							if (key < hdr.records[i].key){
 								hdr.records[i+1].ptr = hdr.records[i].ptr;
 								hdr.records[i+1].key = hdr.records[i].key;
+
+								hdr.buffer_records[i+1] = hdr.buffer_records[i];
+
 								if(flush) {
 									uint64_t records_ptr = (uint64_t)(&hdr.records[i+1]);
 
@@ -502,6 +520,9 @@ class page{
 								hdr.records[i+1].ptr = hdr.records[i].ptr;
 								hdr.records[i+1].key = key;
 								hdr.records[i+1].ptr = ptr;
+
+								hdr.buffer_records[i+1] = cal_hash(key);
+
 								if(flush)
 									clflush((char*)&hdr.records[i+1],sizeof(entry));
 								inserted = 1;
@@ -512,6 +533,9 @@ class page{
 							hdr.records[0].ptr =(char*) hdr.leftmost_ptr;
 							hdr.records[0].key = key;
 							hdr.records[0].ptr = ptr;
+
+							hdr.buffer_records[0] = cal_hash(key);
+
 							if(flush)
 								clflush((char*) &hdr.records[0], sizeof(entry)); 
 							hdr.first_index = 0;
@@ -531,6 +555,8 @@ class page{
 									int insert_idx = (idx - 1) & (cardinality - 1);
 									hdr.records[insert_idx].ptr = hdr.records[idx].ptr;
 									hdr.records[insert_idx].key = hdr.records[idx].key;
+
+									hdr.buffer_records[insert_idx] = hdr.buffer_records[idx];
 									// flush the cacheline if A[idx] is at the start of a cache line;
 									if(flush) {
 										uint64_t records_ptr = (uint64_t)(&hdr.records[idx]);
@@ -551,6 +577,9 @@ class page{
 							int insert_idx = (hdr.first_index + i - 1) & (cardinality - 1);
 							hdr.records[insert_idx].key = key;
 							hdr.records[insert_idx].ptr = ptr;
+
+							hdr.buffer_records[insert_idx] = cal_hash(key);
+
 							if(flush)
 								clflush((char*)&hdr.records[insert_idx], sizeof(entry));
 							is_left = true;
@@ -565,6 +594,8 @@ class page{
 									int insert_idx = (idx + 1) & (cardinality - 1);
 									hdr.records[insert_idx].ptr = hdr.records[idx].ptr;
 									hdr.records[insert_idx].key = hdr.records[idx].key;
+
+									hdr.buffer_records[insert_idx] = hdr.buffer_records[idx];
 									// flush the cacheline if A[idx] is at the start of a cache line;
 									if(flush) {
 										uint64_t records_ptr = (uint64_t)(&hdr.records[insert_idx]);
@@ -586,6 +617,8 @@ class page{
 							int insert_idx = (hdr.first_index + i + 1) & (cardinality - 1);
 							hdr.records[insert_idx].key = key;
 							hdr.records[insert_idx].ptr = ptr;
+
+							hdr.buffer_records[insert_idx] = cal_hash(key);
 							inserted = 1;
 							if(flush)
 								clflush((char*)&hdr.records[insert_idx],sizeof(entry));
@@ -595,6 +628,8 @@ class page{
 							hdr.records[0].ptr =(char*) hdr.leftmost_ptr;
 							hdr.records[0].key = key;
 							hdr.records[0].ptr = ptr;
+
+							hdr.buffer_records[0] = cal_hash(key);
 							if(flush)
 								clflush((char*) &hdr.records[0], sizeof(entry)); 
 							hdr.first_index = 0;
@@ -606,12 +641,12 @@ class page{
 				// important   TODO: colision here?
 				++hdr.num_valid_key;
 
-				// update buffer record;
-				for(int i=0; i<hdr.num_valid_key; i+=count_in_line){
-					int record_idx = get_index(hdr.first_index + i);
-					int buffer_idx = i >> 2;
-					hdr.buffer_records[buffer_idx] = hdr.records[record_idx].key;
-				}
+				// // update buffer record;
+				// for(int i=0; i<hdr.num_valid_key; i+=count_in_line){
+				// 	int record_idx = get_index(hdr.first_index + i);
+				// 	int buffer_idx = i >> 2;
+				// 	hdr.buffer_records[buffer_idx] = hdr.records[record_idx].key;
+				// }
 
 				if (is_left){
 					hdr.first_index = (hdr.first_index - 1) & (cardinality - 1);
@@ -726,185 +761,22 @@ class page{
 				while(current) {}
 
 			}
-	#if 0
-		char *linear_search(entry_key_t key) {
-			char *ret = nullptr;
-			char *t; 
-			entry data;
-			int first_idx = hdr.first_index;
-			int last_idx = get_last_idx();
-
-			// linear search
-			/*
-			   if(hdr.leftmost_ptr != nullptr) { // Search a internal node
-			   data = hdr.records[first_idx];
-			   ret = data.ptr;
-			   if (key < data.key){
-			   ret = (char *)hdr.leftmost_ptr;
-			   }else{
-			   for (int i = first_idx; i <= last_idx; i++){
-			   data = hdr.records[i];
-			   if ( data.key > key){
-			   ret = data.ptr;
-			   }else{
-			   break;
-			   }
-			   }
-			   }
-			   if((t = (char *)hdr.right_sibling_ptr) != nullptr) {
-			   page* tmp = (page*) t;
-			   if(key >= tmp->hdr.records[tmp->hdr.first_index].key)
-			   return t;
-			   }
-
-			   return ret;
-
-			   }else{
-			   for (int i = 0; i < cardinality; i++){
-			   if (i == last_idx+1){
-			   i = (last_idx > first_idx)? cardinality : (first_idx - 1);
-			   continue;
-			   }
-			   data = hdr.records[i];
-			   if (data.key == key){
-			   ret = data.ptr;
-			   break;
-			   }
-			   }
-			   if(ret) {
-			   return ret;
-			   }
-
-			   if((t = (char *)hdr.right_sibling_ptr)){
-			   page* tmp = (page*) t;
-			   if (key >= (tmp)->hdr.records[(tmp)->hdr.first_index].key)
-			   return t;			
-			   } 
-
-			   return nullptr;
-			   }
-			   return nullptr;
-			 */
-
-			// origin way
-			//
-			//
-			//
-			if(hdr.leftmost_ptr != nullptr) { // Search a internal node
-				if (last_idx - first_idx > 0){   // search in continious space
-					data = hdr.records[first_idx];
-					ret = data.ptr;
-					if (key < data.key){
-						ret = (char *)hdr.leftmost_ptr;
-					}else{
-						for (int i = first_idx; i <= last_idx; ++i){
-							data = hdr.records[i];
-							if ( data.key > key){
-								ret = data.ptr;
-							}else{
-								break;
-							}
-						}
-					}
-
-				}else{  // search in disjointed space
-					if (key < hdr.records[0].key){    // search in 'left' part
-						data = hdr.records[first_idx];
-						ret = data.ptr;
-						if (key < data.key){
-							ret = (char *) hdr.leftmost_ptr;
-						}else{
-							for (int i = first_idx; i<cardinality; ++i){
-								data = hdr.records[i];
-								if (data.key > key){
-									ret = data.ptr;
-								}else{
-									break;
-								}
-							}
-						}
-
-					}else{
-						ret = hdr.records[0].ptr;
-						for (int i = 0; i<=last_idx; i++){
-							data = hdr.records[i];
-							if (data.key > key){
-								ret = data.ptr;
-							}else{
-								break;
-							}
-						}
-					}
-				}
-				if((t = (char *)hdr.right_sibling_ptr) != nullptr) {
-					page* tmp = (page*) t;
-					if(key >= tmp->hdr.records[tmp->hdr.first_index].key)
-						return t;
-				}
-
-				return ret;
-			}
-			else { // leaf node
-				if (last_idx - first_idx < 0){  // search in disjointed space
-					if (key >= hdr.records[0].key){    // search in 'left' part
-						for (int i = 0; i<=last_idx; ++i){
-							data = hdr.records[i];
-							if (data.key == key){
-								ret = data.ptr;
-								break;
-							}
-						}
-					}else{
-						for (int i = first_idx; i<cardinality; ++i){
-							data = hdr.records[i];
-							if (data.key == key){
-								ret = data.ptr;
-								break;
-							}
-						}
-					}
-				}else{  // search in continious space
-					for (int i = first_idx; i <= last_idx; i++){
-						data = hdr.records[i];
-						if ( data.key == key){
-							ret = data.ptr;
-							break;
-						}
-					}
-				}
-				if(ret) {
-					return ret;
-				}
-
-				if((t = (char *)hdr.right_sibling_ptr)){
-					page* tmp = (page*) t;
-					if (key >= (tmp)->hdr.records[(tmp)->hdr.first_index].key)
-						return t;			
-				} 
-
-				return nullptr;  
-			}
-
-			return nullptr;
-		}
-	#else
 		char *linear_search(entry_key_t key) {
                                 int i = 1;
                                 char *ret = nullptr;
                                 char *t;
                                 entry_key_t k;
-
+																unsigned char hash_val = cal_hash(key);
                                 if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
-																	int begin_idx = 0;
-																	for (i = 1; i < count() / count_in_line; i++){
-																		if (key < hdr.buffer_records[i]) break;
-																		begin_idx += count_in_line;
-																	}
-																	for (i = begin_idx; i < count(); ++i)
-																		if (key == hdr.records[(hdr.first_index + i) & (cardinality - 1)].key) {
-																			ret = hdr.records[(hdr.first_index + i) & (cardinality - 1)].ptr;
-																			break;
+																	for (i = 0; i < count(); ++i){
+																		int idx = get_index(hdr.first_index + i);
+																		if (hash_val == hdr.buffer_records[idx]) {
+																			if (key == hdr.records[idx].key){
+																				ret = hdr.records[idx].ptr;
+																				break;
+																			}
 																		}
+																	}	
 																	if(ret) {
 																		return ret;
 																	}
@@ -916,15 +788,10 @@ class page{
                                 else { // internal node, which you do not have circular design. -- wangc@2020.03.22
 																	ret = nullptr;
 
-																	if(key < (k = hdr.buffer_records[0])) {
+																	if(key < (k = hdr.records[0].key)) {
 																		ret = (char *)hdr.leftmost_ptr;
 																	} else {
-																		int begin_idx = 1;
-																		for (int i=1; i<count()/count_in_line; i++){
-																			if (key < hdr.buffer_records[i]) break;
-																			begin_idx += count_in_line;
-																		}
-																		for(i = begin_idx; i < count(); ++i) {
+																		for(i = 1; i < count(); ++i) {
 																			if(key < (k = hdr.records[i].key)) {
 																				ret = hdr.records[i - 1].ptr;
 																				break;
@@ -949,7 +816,6 @@ class page{
 
                                 return nullptr;
                         }
-	#endif
 
 		// print a node 
 		void print() {
