@@ -136,9 +136,9 @@ int main(int argc, char** argv)
     // bt->btree_delete(262812);
     
 
-    for(int i = num_data-1; i > 0; --i) {
-        bt->btree_delete(keys[i]);
-    }
+    // for(int i = num_data-1; i > 0; --i) {
+    //     bt->btree_delete(keys[i]);
+    // }
     // bt->btree_delete(256);
     // bt->btree_delete(511);
 

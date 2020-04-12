@@ -119,6 +119,7 @@ class entry{
 };
 
 const int cardinality = 512;
+const int count_in_line = CACHE_LINE_SIZE / sizeof(entry);
 
 class header{
 	private:
@@ -131,13 +132,12 @@ class header{
 		// char dummy[8];              // 8 bytes
 
 		entry* records;              // 8B
-		entry* buffer_records;       // 8B
+		entry_key_t* buffer_records;       // 8B
 		uint32_t first_index;         // 4B
 		uint32_t num_valid_key;        // 4B
 		// mutex here
 		page* leftmost_ptr;            // 8B
 		page* right_sibling_ptr;             // 8B
-		page* left_sibling_ptr;        // 8B
 		uint32_t level;             // 4 bytes
 		// TODO: maybe delete switch_counter?
 		uint8_t is_deleted;         // 1 bytes
@@ -150,11 +150,10 @@ class header{
 	public:
 		header() {
 			records = new entry[cardinality];
-			buffer_records = new entry[cardinality / CACHE_LINE_SIZE];
+			buffer_records = new entry_key_t[cardinality / CACHE_LINE_SIZE];
 			first_index = 0;
 			num_valid_key = 0;
 			leftmost_ptr = nullptr;  
-			left_sibling_ptr = nullptr;
 			right_sibling_ptr = nullptr;
 			is_deleted = false;
 
@@ -169,7 +168,7 @@ class header{
 
 
 
-const int count_in_line = CACHE_LINE_SIZE / sizeof(entry);
+
 
 class page{
 	private:
@@ -181,7 +180,6 @@ class page{
 		page(uint32_t level = 0) {
 			hdr.level = level;
 			hdr.records[0].ptr = nullptr;
-			hdr.buffer_records[0].ptr = nullptr;
 		}
 
 		// this is called when tree grows
@@ -194,9 +192,7 @@ class page{
 			hdr.records[0].ptr = (char*) right;
 			hdr.records[1].ptr = nullptr;
 
-			hdr.buffer_records[0].key = key;
-			hdr.buffer_records[0].ptr = (char*) right;
-			hdr.buffer_records[1].ptr = nullptr;
+			hdr.buffer_records[0] = key;
  
 			hdr.first_index = 0;
 			hdr.num_valid_key = 1;
@@ -474,8 +470,7 @@ class page{
 
 					array_end->ptr = (char*)nullptr;
 
-					hdr.buffer_records[0].key = key;
-					hdr.buffer_records[0].ptr = (char*) ptr;
+					hdr.buffer_records[0] = key;
 
 					hdr.first_index = 0;
 
@@ -612,11 +607,10 @@ class page{
 				++hdr.num_valid_key;
 
 				// update buffer record;
-				for(int i=0; i<hdr.num_valid_key; i+=64){
+				for(int i=0; i<hdr.num_valid_key; i+=CACHE_LINE_SIZE){
 					int record_idx = get_index(hdr.first_index + i);
 					int buffer_idx = i / CACHE_LINE_SIZE;
-					hdr.buffer_records[buffer_idx].key = hdr.records[record_idx].key;
-					hdr.buffer_records[buffer_idx].ptr = hdr.records[record_idx].ptr;
+					hdr.buffer_records[buffer_idx] = hdr.records[record_idx].key;
 				}
 
 				if (is_left){
@@ -680,7 +674,6 @@ class page{
 					}
 
 					sibling->hdr.right_sibling_ptr = hdr.right_sibling_ptr;
-					sibling->hdr.left_sibling_ptr = this;   // change the left_sibling_ptr here
 					clflush((char *)sibling, sizeof(page));
 
 					hdr.right_sibling_ptr = sibling;
@@ -902,56 +895,56 @@ class page{
                                 entry_key_t k;
 
                                 if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
-																				int begin_idx = 0;
-																				for (i = 1; i < count() / CACHE_LINE_SIZE; i++){
-																					if (key < hdr.buffer_records[i].key) break;
-																					begin_idx += 64;
-																				}
-                                        for (i = begin_idx; i < count(); ++i)
-																					if (key == hdr.records[(hdr.first_index + i) & (cardinality - 1)].key) {
-																						ret = hdr.records[(hdr.first_index + i) & (cardinality - 1)].ptr;
-																						break;
-																					}
-                                        if(ret) {
-																					return ret;
-                                        }
-                                        if((t = (char *)hdr.right_sibling_ptr) != nullptr && key >= ((page *)t)->hdr.records[(((page *)t)->hdr).first_index].key)
-																					return t;
+																	int begin_idx = 0;
+																	for (i = 1; i < count() / CACHE_LINE_SIZE; i++){
+																		if (key < hdr.buffer_records[i]) break;
+																		begin_idx += CACHE_LINE_SIZE;
+																	}
+																	for (i = begin_idx; i < count(); ++i)
+																		if (key == hdr.records[(hdr.first_index + i) & (cardinality - 1)].key) {
+																			ret = hdr.records[(hdr.first_index + i) & (cardinality - 1)].ptr;
+																			break;
+																		}
+																	if(ret) {
+																		return ret;
+																	}
+																	if((t = (char *)hdr.right_sibling_ptr) != nullptr && key >= ((page *)t)->hdr.records[(((page *)t)->hdr).first_index].key)
+																		return t;
 
-                                        return nullptr;
+																	return nullptr;
                                 }
                                 else { // internal node, which you do not have circular design. -- wangc@2020.03.22
-                                        ret = nullptr;
+																	ret = nullptr;
 
-                                        if(key < (k = hdr.buffer_records[0].key)) {
-																					ret = (char *)hdr.leftmost_ptr;
-                                        } else {
-																					int begin_idx = 1;
-																					for (int i=1; i<count()/CACHE_LINE_SIZE; i++){
-																						if (key < hdr.buffer_records[i].key) break;
-																						begin_idx += 64;
-																					}
-																					for(i = begin_idx; i < count(); ++i) {
-																						if(key < (k = hdr.records[i].key)) {
-																							ret = hdr.records[i - 1].ptr;
-																							break;
-																						}
-																					}
+																	if(key < (k = hdr.buffer_records[0])) {
+																		ret = (char *)hdr.leftmost_ptr;
+																	} else {
+																		int begin_idx = 1;
+																		for (int i=1; i<count()/CACHE_LINE_SIZE; i++){
+																			if (key < hdr.buffer_records[i]) break;
+																			begin_idx += CACHE_LINE_SIZE;
+																		}
+																		for(i = begin_idx; i < count(); ++i) {
+																			if(key < (k = hdr.records[i].key)) {
+																				ret = hdr.records[i - 1].ptr;
+																				break;
+																			}
+																		}
 
-																					if(!ret) {
-																						ret = hdr.records[i - 1].ptr;
-																					}
-                                        }
-                                        if ((t = (char *)hdr.right_sibling_ptr) != nullptr) {
-																					if(key >= ((page *)t)->hdr.records[0].key)
-																						return t;
-                                        }
+																		if(!ret) {
+																			ret = hdr.records[i - 1].ptr;
+																		}
+																	}
+																	if ((t = (char *)hdr.right_sibling_ptr) != nullptr) {
+																		if(key >= ((page *)t)->hdr.records[0].key)
+																			return t;
+																	}
 
-                                        if (ret) {
-																					return ret;
-                                        } else {
-																					return (char *)hdr.leftmost_ptr;
-                                        }
+																	if (ret) {
+																		return ret;
+																	} else {
+																		return (char *)hdr.leftmost_ptr;
+																	}
                                 }
 
                                 return nullptr;
