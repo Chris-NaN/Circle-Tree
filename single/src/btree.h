@@ -150,7 +150,7 @@ class header{
 	public:
 		header() {
 			records = new entry[cardinality];
-			buffer_records = new entry_key_t[cardinality / CACHE_LINE_SIZE];
+			buffer_records = new entry_key_t[cardinality / count_in_line];
 			first_index = 0;
 			num_valid_key = 0;
 			leftmost_ptr = nullptr;  
@@ -607,9 +607,9 @@ class page{
 				++hdr.num_valid_key;
 
 				// update buffer record;
-				for(int i=0; i<hdr.num_valid_key; i+=CACHE_LINE_SIZE){
+				for(int i=0; i<hdr.num_valid_key; i+=count_in_line){
 					int record_idx = get_index(hdr.first_index + i);
-					int buffer_idx = i / CACHE_LINE_SIZE;
+					int buffer_idx = i >> 2;
 					hdr.buffer_records[buffer_idx] = hdr.records[record_idx].key;
 				}
 
@@ -896,9 +896,9 @@ class page{
 
                                 if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
 																	int begin_idx = 0;
-																	for (i = 1; i < count() / CACHE_LINE_SIZE; i++){
+																	for (i = 1; i < count() / count_in_line; i++){
 																		if (key < hdr.buffer_records[i]) break;
-																		begin_idx += CACHE_LINE_SIZE;
+																		begin_idx += count_in_line;
 																	}
 																	for (i = begin_idx; i < count(); ++i)
 																		if (key == hdr.records[(hdr.first_index + i) & (cardinality - 1)].key) {
@@ -920,9 +920,9 @@ class page{
 																		ret = (char *)hdr.leftmost_ptr;
 																	} else {
 																		int begin_idx = 1;
-																		for (int i=1; i<count()/CACHE_LINE_SIZE; i++){
+																		for (int i=1; i<count()/count_in_line; i++){
 																			if (key < hdr.buffer_records[i]) break;
-																			begin_idx += CACHE_LINE_SIZE;
+																			begin_idx += count_in_line;
 																		}
 																		for(i = begin_idx; i < count(); ++i) {
 																			if(key < (k = hdr.records[i].key)) {
