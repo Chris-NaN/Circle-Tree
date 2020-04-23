@@ -168,7 +168,7 @@ class header{
 
 		~header() {
 			delete[] records;
-			delete[] buffer_records;
+			//delete[] buffer_records;
 		}
 };
 
