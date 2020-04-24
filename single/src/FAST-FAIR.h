@@ -23,8 +23,7 @@
 #include <climits>
 #include <future>
 #include <mutex>
-
-#define PAGESIZE 512
+#include "config.h"
 
 #define CPU_FREQ_MHZ (1566)
 #define DELAY_IN_NS (1000)

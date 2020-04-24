@@ -24,8 +24,7 @@
 #include <future>
 #include <mutex>
 #include <pthread.h>
-
-#define PAGESIZE 512
+#include "config.h"
 
 #define CPU_FREQ_MHZ (1566)
 #define DELAY_IN_NS (1000)
@@ -118,7 +117,7 @@ class entry{
 		friend class btree;
 };
 
-const int cardinality = 32;
+const int cardinality = record_size;
 const int count_in_line = CACHE_LINE_SIZE / sizeof(entry);
 
 class header{
