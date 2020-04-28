@@ -138,8 +138,9 @@ const int count_in_line = CACHE_LINE_SIZE / sizeof(entry);
 class header{
 	private:
 		entry* records;              // 8B
-		unsigned char buffer_records[cardinality];       // 32B
-		uint16_t first_index;         // 2B
+		//unsigned char buffer_records[cardinality];       // 32B
+		unsigned char* buffer_records;
+                uint16_t first_index;         // 2B
 		uint16_t num_valid_key;        // 2B
 		// mutex here
 		page* leftmost_ptr;            // 8B
@@ -156,7 +157,7 @@ class header{
 	public:
 		header() {
 			records = new entry[cardinality];
-			// buffer_records = new unsigned char[cardinality];
+			buffer_records = new unsigned char[cardinality];
 			first_index = 0;
 			num_valid_key = 0;
 			leftmost_ptr = nullptr;  

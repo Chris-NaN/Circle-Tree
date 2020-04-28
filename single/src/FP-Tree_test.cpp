@@ -5,6 +5,7 @@
 #include "FP-Tree.h"
 using namespace std;
 
+#pragma comment(linker, "/STACK:102400000,102400000")
 
 std::vector<int> CreateRandomNums(int min,int max, int num)
 {

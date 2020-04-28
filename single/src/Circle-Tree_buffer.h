@@ -125,8 +125,8 @@ class header{
 
 
 		entry* records;              // 8B
-		entry_key_t buffer_records[cardinality / count_in_line];       // 8B * 4
-		// entry_key_t* buffer_records;
+		//entry_key_t buffer_records[cardinality / count_in_line];       // 8B * 4
+		entry_key_t* buffer_records;
 		uint16_t first_index;         // 2B
 		uint16_t num_valid_key;        // 2B
 
@@ -143,7 +143,7 @@ class header{
 	public:
 		header() {
 			records = new entry[cardinality];
-			// buffer_records = new entry_key_t[cardinality / count_in_line];
+			buffer_records = new entry_key_t[cardinality / count_in_line];
 			first_index = 0;
 			num_valid_key = 0;
 			leftmost_ptr = nullptr;  
