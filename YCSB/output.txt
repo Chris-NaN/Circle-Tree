@@ -1,0 +1,3 @@
+load_time: 4549 average load_time: 4
+search_time: 75 average search_time: 0
+update_time: 137 average update_time: 0
