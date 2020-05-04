@@ -81,6 +81,10 @@ inline void clflush(char *data, int len)
 	mfence();
 }
 
+inline int mod_4(int num){
+	return num & 3;
+}
+
 class page;
 
 class btree{
@@ -480,6 +484,7 @@ class page{
 							if (key < hdr.records[i].key){
 								hdr.records[i+1].ptr = hdr.records[i].ptr;
 								hdr.records[i+1].key = hdr.records[i].key;
+								// if (mod_4(i+1) == 0) hdr.buffer_records[(i+1) >> 2] = hdr.records[i+1].key;
 								if(flush) {
 									uint64_t records_ptr = (uint64_t)(&hdr.records[i+1]);
 
