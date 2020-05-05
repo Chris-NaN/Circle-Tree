@@ -691,7 +691,7 @@ class page{
 
           // search from left ro right
           if(IS_FORWARD(previous_switch_counter)) { 
-            if((k = records[0].key) == key) {
+            if((k = buffer_records[0]) == key) {
               if((t = records[0].ptr) != NULL) {
                 if(k == records[0].key) {
                   ret = t;
@@ -762,7 +762,7 @@ class page{
           ret = NULL;
 
           if(IS_FORWARD(previous_switch_counter)) {
-            if(key < (k = records[0].key)) {
+            if(key < (k = buffer_records[0])) {
               if((t = (char *)hdr.leftmost_ptr) != records[0].ptr) { 
                 ret = t;
                 continue;
