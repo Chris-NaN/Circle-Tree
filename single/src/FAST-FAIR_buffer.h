@@ -700,8 +700,8 @@ class page{
               }
             }
             int begin_idx = 1;
-            for (int i=1; i < count(); i++){
-              if (key < buffer_records[i]) break;
+            for (i=1; i <= hdr.last_index / count_in_line; i++){
+              if (key <= buffer_records[i]) break;
               begin_idx += count_in_line;
             }
             for(i=begin_idx; records[i].ptr != NULL; ++i) { 
@@ -717,11 +717,12 @@ class page{
           }
           else { // search from right to left
             int begin_idx = 0;
-            for (int i=1; i < count(); i++){
-              if (key < buffer_records[i]) break;
+            for (i=1; i <= hdr.last_index / count_in_line; i++){
               begin_idx += count_in_line;
+              if (key < buffer_records[i]) break;
             }
-            for(i = count() - 1; i > begin_idx; --i) {
+            i = begin_idx <= count()-1? begin_idx : hdr.last_index;
+            for(; i > 0; --i) {
               if((k = records[i].key) == key) {
                 if(records[i - 1].ptr != (t = records[i].ptr) && t) {
                   if(k == records[i].key) {
@@ -755,6 +756,7 @@ class page{
         return NULL;
       }
       else { // internal node
+      
         do {
           previous_switch_counter = hdr.switch_counter;
           ret = NULL;
@@ -767,8 +769,8 @@ class page{
               }
             }
             int begin_idx = 1;
-            for (int i=1; i < count(); i++){
-              if (key < buffer_records[i]) break;
+            for (int i=1; i < count() / count_in_line; i++){
+              if (key <= buffer_records[i]) break;
               begin_idx += count_in_line;
             }
             for(i = begin_idx; records[i].ptr != NULL; ++i) { 
@@ -786,7 +788,15 @@ class page{
             }
           }
           else { // search from right to left
-            for(i = count() - 1; i >= 0; --i) {
+            int begin_idx = 0;
+            for (int i=1; i < count() / count_in_line; i++){
+              begin_idx += count_in_line;
+              if (key < buffer_records[i]) break;
+              
+            }
+            i = begin_idx < count() ? begin_idx : count()-1;
+
+            for(; i >= 0; --i) {
               if(key >= (k = records[i].key)) {
                 if(i == 0) {
                   if((char *)hdr.leftmost_ptr != (t = records[i].ptr)) {

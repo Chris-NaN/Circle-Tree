@@ -166,7 +166,7 @@ int main(int argc, char** argv)
         (double)elapsed_time / num_data);
     }
 
-    bt->printAll();
+    // bt->printAll();
 
     
 
