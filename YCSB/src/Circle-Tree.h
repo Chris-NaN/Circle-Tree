@@ -473,6 +473,7 @@ class page{
 				}
 			}
 			update_key(key, ptr, offset, true);
+			return this;
 		}
 
 		void insert_key(entry_key_t key, char* ptr, int offset, int *num_entries, bool flush = true,
