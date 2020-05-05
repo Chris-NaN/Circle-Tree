@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <time.h>
 #include <fstream>
-#include "FAST-FAIR.h"
+#include "FAST-FAIR_buffer.h"
 using namespace std;
 
 #pragma comment(linker, "/STACK:102400000,102400000")
