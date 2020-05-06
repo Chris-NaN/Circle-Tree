@@ -34,9 +34,6 @@
 // Q: wth??
 #define IS_FORWARD(c) (c % 2 == 0)
 
-const int field_num = 10;
-const int field_size = 100;
-const int data_size = field_num * field_size;
 
 using entry_key_t = int64_t;
 

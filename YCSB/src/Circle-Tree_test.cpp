@@ -121,7 +121,9 @@ int main(int argc, char** argv)
         cout << "run_data_file loading error!" << endl;
         exit(-1);  
     }
+    // return 0;
     while(getline(ifs, line)){
+        
         // cout<<line<<endl;
         istringstream cut_word(line);
         cut_word >> word;
@@ -131,10 +133,12 @@ int main(int argc, char** argv)
             i_key = stoi(key);
             clock_gettime(CLOCK_MONOTONIC,&start);
             bt->btree_search(i_key, -1);
+            
             clock_gettime(CLOCK_MONOTONIC,&end);
             search_time += (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
             // cout << key << endl;
         }else if(word == "HMSET"){
+            
             cut_word >> key;  // user info
             key = key.substr(key.length() - 9);
             cut_word >> word;  // field info
@@ -149,14 +153,15 @@ int main(int argc, char** argv)
             bt->btree_update(i_key, p_val, offset);
             clock_gettime(CLOCK_MONOTONIC,&end);
             update_time += (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
-            // bt->printAll();
-            // return 0;
+            
+            
         }
     }
     load_time /= 1000, search_time /= 1000, update_time /= 1000;
     cout << "load_time: " << load_time << " average load_time: " << load_time / num_data <<endl;
     cout << "search_time: " << search_time << " average search_time: " << search_time / num_data <<endl;
     cout << "update_time: " << update_time << " average update_time: " << update_time / num_data <<endl;
+    bt->printAll();
     return 0;
 
     for(int i=0; i<num_data; ++i)
