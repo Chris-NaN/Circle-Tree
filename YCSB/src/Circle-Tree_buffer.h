@@ -897,6 +897,18 @@ char *btree::btree_search(entry_key_t key, int offset){
 	return (char *)t;
 }
 
+void btree::btree_update(entry_key_t key,const char* right, int offset){
+	page* p = (page*)root;
+
+	while(p->hdr.leftmost_ptr != nullptr) {
+		p = (page*)p->linear_search(key, offset);
+	}
+
+	if(!p->update(this, key, right, offset, true)) { // store 
+		btree_update(key, right, offset);
+	}
+}
+
 // insert the key in the leaf node
 void btree::btree_insert(entry_key_t key, char* right, int offset){ //need to be string
 	page* p = (page*)root;
