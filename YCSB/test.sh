@@ -1,12 +1,13 @@
 #!/bin/bash
-input_file="test/random_100m_input.txt"
-size=100000000
+load_file="test/data_a_1m_load.txt"
+run_file="test/data_a_1m_run.txt"
+size=1000000
 output_file="output.txt"
 echo "FAST-FAIR" > output.txt
-./FAST-FAIR -i $input_file -n $size >> output.txt
+./FAST-FAIR -l $load_file -r $run_file -n $size >> output.txt
 echo "Circle-Tree" >> output.txt
-./Circle-Tree -i $input_file -n $size >> output.txt
+./Circle-Tree -l $load_file -r $run_file -n $size >> output.txt
 echo "Circle-Tree_buffer" >> output.txt
-./Circle-Tree_buffer -i $input_file -n $size >> output.txt
+./Circle-Tree_buffer -l $load_file -r $run_file -n $size >> output.txt
 echo "FP-Tree" >> output.txt
-./FP-Tree -i $input_file -n $size >> output.txt
+./FP-Tree -l $load_file -r $run_file -n $size >> output.txt
