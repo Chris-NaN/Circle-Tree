@@ -155,7 +155,7 @@ class page{
 
     page(uint32_t level = 0) {
       hdr.level = level;
-      records[0].ptr = NULL;
+      records[0].ptr = (uint64_t) nullptr;
     }
 
     // this is called when tree grows
@@ -184,7 +184,7 @@ class page{
         previous_switch_counter = hdr.switch_counter;
         count = hdr.last_index + 1;
 
-        while(count >= 0 && records[count].ptr != NULL) {
+        while(count >= 0 && records[count].ptr != (uint64_t) nullptr) {
           if(IS_FORWARD(previous_switch_counter))
             ++count;
           else
@@ -193,7 +193,7 @@ class page{
 
         if(count < 0) {
           count = 0;
-          while(records[count].ptr != NULL) {
+          while(records[count].ptr != (uint64_t) nullptr) {
             ++count;
           }
         }
@@ -815,7 +815,7 @@ class page{
       if(hdr.leftmost_ptr!=NULL) 
         printf("%x ",hdr.leftmost_ptr);
 
-      for(int i=0;records[i].ptr != NULL;++i){
+      for(int i=0;records[i].ptr != (uint64_t) nullptr;++i){
         printf("K:%ld, ", records[i].key);
         printf("V:%x. ",*((char *)records[i].ptr));
       }
@@ -835,7 +835,7 @@ class page{
         printf("printing internal node: ");
         print();
         ((page*) hdr.leftmost_ptr)->printAll();
-        for(int i=0;records[i].ptr != NULL;++i){
+        for(int i=0;records[i].ptr != (uint64_t) nullptr;++i){
           ((page*) records[i].ptr)->printAll();
         }
       }
