@@ -159,9 +159,9 @@ int main(int argc, char** argv)
     }
     cout << "Circle-Tree: "<<endl;
     load_time /= 1000, search_time /= 1000, update_time /= 1000;
-    cout << "load_time: " << load_time << " average load_time: " << load_time / num_data <<endl;
-    cout << "search_time: " << search_time << " average search_time: " << search_time / num_data <<endl;
-    cout << "update_time: " << update_time << " average update_time: " << update_time / num_data <<endl;
+    cout << "load_time: " << load_time << " average load_time: " << load_time / float(num_data) <<endl;
+    cout << "search_time: " << search_time << " average search_time: " << search_time / float(num_data) <<endl;
+    cout << "update_time: " << update_time << " average update_time: " << update_time / float(num_data) <<endl;
     //bt->printAll();
     return 0;
 
