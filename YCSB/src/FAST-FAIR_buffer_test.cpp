@@ -4,7 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include "FP-Tree.h"
+#include "FAST-FAIR_buffer.h"
 using namespace std;
 
 #pragma comment(linker, "/STACK:102400000,102400000")
@@ -157,12 +157,12 @@ int main(int argc, char** argv)
             
         }
     }
-    cout << "Circle-Tree_fingerpoint: "<<endl;
+    cout << "FAST-FAIR: "<<endl;
     load_time /= 1000, search_time /= 1000, update_time /= 1000;
     cout << "load_time: " << load_time << " average load_time: " << load_time / float(num_data) <<endl;
     cout << "search_time: " << search_time << " average search_time: " << search_time / float(num_data) <<endl;
     cout << "update_time: " << update_time << " average update_time: " << update_time / float(num_data) <<endl;
-    //bt->printAll();
+    // bt->printAll();
     return 0;
 
     for(int i=0; i<num_data; ++i)
