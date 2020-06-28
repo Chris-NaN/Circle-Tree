@@ -1,0 +1,3 @@
+FAST-FAIR_bufer:
+INSERT elapsed_time: 127290747, Avg: 1.272907
+SEARCH elapsed_time: 78762128, Avg: 0.787621

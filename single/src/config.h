@@ -1,3 +1,3 @@
 
-#define PAGESIZE 2048
+#define PAGESIZE 512
 const int record_size = 256;
