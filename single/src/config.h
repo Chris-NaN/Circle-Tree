@@ -1,3 +1,3 @@
 
-#define PAGESIZE 512
-const int record_size = 64;
+#define PAGESIZE 1024
+const int record_size = 128;

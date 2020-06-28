@@ -690,6 +690,14 @@ class page{
           mid = (left + right)>>1;
         }while (left <= right);
         
+        /*for(i = 0; records[i].ptr != NULL; ++i) { 
+            if((k = records[i].key) == key) { 
+                 if(records[i-1].ptr != (t = records[i].ptr)) {
+                     ret = t;
+                     break;
+                 }
+            }
+        }*/
 
         if(ret) {
           return ret;
@@ -708,16 +716,17 @@ class page{
             return ret;
           }
         }
-        // for(i = 1; records[i].ptr != NULL; ++i) { 
-        //   if(key < (k = records[i].key)) { 
-        //     if((t = records[i-1].ptr) != records[i].ptr) {
-        //       ret = t;
-        //       break;
-        //     }
-        //   }
-        // }
+        for(i = 1; records[i].ptr != NULL; ++i) { 
+          if(key < (k = records[i].key)) { 
+            if((t = records[i-1].ptr) != records[i].ptr) {
+              ret = t;
+              break;
+            }
+          }
+        }
+        if(!ret){ ret = records[i-1].ptr; }
         
-        while(left <= right){
+        /*while(left <= right){
           mid = (left + right)>>1;
           if (key >= records[mid].key){
             left = mid + 1;
@@ -728,7 +737,7 @@ class page{
 
         if(!ret) {
           ret = records[left - 1].ptr; 
-        }
+        }*/
 
         if((t = (char *)hdr.sibling_ptr) != NULL) {
           if(key >= ((page *)t)->records[0].key)
