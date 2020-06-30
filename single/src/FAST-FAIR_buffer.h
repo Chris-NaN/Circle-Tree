@@ -685,66 +685,25 @@ class page{
       entry_key_t k;
 
       if(hdr.leftmost_ptr == NULL) { // Search a leaf node
-        do {
-          previous_switch_counter = hdr.switch_counter;
-          ret = NULL;
+        ret = NULL;
 
-          // search from left ro right
-          if(IS_FORWARD(previous_switch_counter)) { 
-            if((k = buffer_records[0]) == key) {
-              if((t = records[0].ptr) != NULL) {
-                if(k == records[0].key) {
-                  ret = t;
-                  continue;
-                }
-              }
-            }
-            int begin_idx = 1;
-            for (i=1; i <= hdr.last_index / count_in_line; i++){
-              if (key <= buffer_records[i]) break;
-              begin_idx += count_in_line;
-            }
-            for(i=begin_idx; records[i].ptr != NULL; ++i) { 
-              if((k = records[i].key) == key) {
-                if(records[i-1].ptr != (t = records[i].ptr)) {
-                  if(k == records[i].key) {
-                    ret = t;
-                    break;
-                  }
-                }
+        // search from left ro right
+        int begin_idx = 0;
+        for (i=1; i <= hdr.last_index / count_in_line; i++){
+          if (key < buffer_records[i]) break;
+          begin_idx += count_in_line;
+        }
+        for(i=begin_idx; records[i].ptr != NULL; ++i) { 
+          if((k = records[i].key) == key) {
+            if(records[i-1].ptr != (t = records[i].ptr)) {
+              if(k == records[i].key) {
+                ret = t;
+                break;
               }
             }
           }
-          else { // search from right to left
-            int begin_idx = 0;
-            for (i=1; i <= hdr.last_index / count_in_line; i++){
-              begin_idx += count_in_line;
-              if (key < buffer_records[i]) break;
-            }
-            i = begin_idx <= count()-1? begin_idx : hdr.last_index;
-            for(; i > 0; --i) {
-              if((k = records[i].key) == key) {
-                if(records[i - 1].ptr != (t = records[i].ptr) && t) {
-                  if(k == records[i].key) {
-                    ret = t;
-                    break;
-                  }
-                }
-              }
-            }
+        }
 
-            if(!ret) {
-              if((k = records[0].key) == key) {
-                if(NULL != (t = records[0].ptr) && t) {
-                  if(k == records[0].key) {
-                    ret = t;
-                    continue;
-                  }
-                }
-              }
-            }
-          }
-        } while(hdr.switch_counter != previous_switch_counter);
 
         if(ret) {
           return ret;
@@ -757,63 +716,30 @@ class page{
       }
       else { // internal node
       
-        do {
-          previous_switch_counter = hdr.switch_counter;
-          ret = NULL;
+        ret = NULL;
 
-          if(IS_FORWARD(previous_switch_counter)) {
-            if(key < (k = buffer_records[0])) {
-              if((t = (char *)hdr.leftmost_ptr) != records[0].ptr) { 
+        if(key < (k = buffer_records[0])) {
+          ret = (char*) hdr.leftmost_ptr;    
+        }else{
+          int begin_idx = 1;
+          for (int i=1; i < count() / count_in_line; i++){
+            if (key < buffer_records[i]) break;
+            begin_idx += count_in_line;
+          }
+          for(i = begin_idx; records[i].ptr != NULL; ++i) { 
+            if(key < (k = records[i].key)) { 
+              if((t = records[i-1].ptr) != records[i].ptr) {
                 ret = t;
-                continue;
-              }
-            }
-            int begin_idx = 1;
-            for (int i=1; i < count() / count_in_line; i++){
-              if (key <= buffer_records[i]) break;
-              begin_idx += count_in_line;
-            }
-            for(i = begin_idx; records[i].ptr != NULL; ++i) { 
-              if(key < (k = records[i].key)) { 
-                if((t = records[i-1].ptr) != records[i].ptr) {
-                  ret = t;
-                  break;
-                }
-              }
-            }
-
-            if(!ret) {
-              ret = records[i - 1].ptr; 
-              continue;
-            }
-          }
-          else { // search from right to left
-            int begin_idx = 0;
-            for (int i=1; i < count() / count_in_line; i++){
-              begin_idx += count_in_line;
-              if (key < buffer_records[i]) break;
-              
-            }
-            i = begin_idx < count() ? begin_idx : count()-1;
-
-            for(; i >= 0; --i) {
-              if(key >= (k = records[i].key)) {
-                if(i == 0) {
-                  if((char *)hdr.leftmost_ptr != (t = records[i].ptr)) {
-                    ret = t;
-                    break;
-                  }
-                }
-                else {
-                  if(records[i - 1].ptr != (t = records[i].ptr)) {
-                    ret = t;
-                    break;
-                  }
-                }
+                break;
               }
             }
           }
-        } while(hdr.switch_counter != previous_switch_counter);
+        }
+        
+
+        if(!ret) {
+          ret = records[i - 1].ptr; 
+        }
 
         if((t = (char *)hdr.sibling_ptr) != NULL) {
           if(key >= ((page *)t)->records[0].key)
