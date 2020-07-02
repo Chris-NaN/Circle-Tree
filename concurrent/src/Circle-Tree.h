@@ -154,7 +154,6 @@ class header{
 		// mutex here
 		page* leftmost_ptr;            // 8B
 		page* right_sibling_ptr;             // 8B
-		page* left_sibling_ptr;        // 8B
 		uint32_t level;             // 4 bytes
 		// TODO: maybe delete switch_counter?
 		uint8_t is_deleted;         // 1 bytes
@@ -174,7 +173,6 @@ class header{
 			first_index = 0;
 			num_valid_key = 0;
 			leftmost_ptr = nullptr;  
-			left_sibling_ptr = nullptr;
 			right_sibling_ptr = nullptr;
 			is_deleted = false;
     }
@@ -692,7 +690,6 @@ class page{
 					}
 
           sibling->hdr.right_sibling_ptr = hdr.right_sibling_ptr;
-          sibling->hdr.left_sibling_ptr = this;   // change the left_sibling_ptr here
           clflush((char *)sibling, sizeof(page));
 
           hdr.right_sibling_ptr = sibling;
