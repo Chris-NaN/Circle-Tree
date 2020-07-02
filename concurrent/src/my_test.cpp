@@ -109,7 +109,7 @@ int main(int argc, char** argv)
     
   clock_gettime(CLOCK_MONOTONIC,&end);
   elapsedTime = (end.tv_sec-start.tv_sec)*1000000000 + (end.tv_nsec-start.tv_nsec);
-  cout<<"Concurrent searching with " << n_threads << " threads (usec) : "<< elapsedTime / 1000 << endl; 
+  cout<<"Concurrent searching with " << n_threads << " threads (usec) : "<< (double)elapsedTime / (1000*numData) << endl; 
   
   clear_cache();
   futures.clear();
@@ -133,7 +133,7 @@ int main(int argc, char** argv)
     
   clock_gettime(CLOCK_MONOTONIC,&end);
   elapsedTime = (end.tv_sec-start.tv_sec)*1000000000 + (end.tv_nsec-start.tv_nsec);
-  cout<<"Concurrent inserting with " << n_threads << " threads (usec) : "<< elapsedTime / 1000 << endl; 
+  cout<<"Concurrent inserting with " << n_threads << " threads (usec) : "<< (double)elapsedTime / (1000*numData) << endl; 
 #else
   clock_gettime(CLOCK_MONOTONIC,&start);
 
@@ -188,7 +188,7 @@ int main(int argc, char** argv)
   elapsedTime = (end.tv_sec-start.tv_sec)*1000000000 + (end.tv_nsec-start.tv_nsec);
   cout<<"Concurrent inserting and searching with " << n_threads << " threads (usec) : "<< elapsedTime / 1000 << endl; 
 #endif
-  bt->printAll();
+  //bt->printAll();
   delete bt;
   delete[] keys;
 
