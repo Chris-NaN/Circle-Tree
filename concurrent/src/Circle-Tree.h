@@ -149,14 +149,14 @@ const int cardinality = 512;
 class header{
   private:
     entry* records;              // 8B
-		uint32_t first_index;         // 4B
-		uint32_t num_valid_key;        // 4B
+		uint16_t first_index;         // 4B
+		uint16_t num_valid_key;        // 4B
 		// mutex here
 		page* leftmost_ptr;            // 8B
 		page* right_sibling_ptr;             // 8B
-		uint32_t level;             // 4 bytes
+		uint16_t level;             // 4 bytes
 		// TODO: maybe delete switch_counter?
-		uint8_t is_deleted;         // 1 bytes
+		uint16_t is_deleted;         // 1 bytes
     std::mutex *mtx;      // 8 bytes
     pthread_spinlock_t slock;
 
@@ -167,7 +167,7 @@ class header{
     header() {
       mtx = new std::mutex();
       
-      // pthread_spin_init(&slock,0);
+      pthread_spin_init(&slock,0);
 
       records = new entry[cardinality];
 			first_index = 0;
@@ -484,7 +484,7 @@ class page{
 					int i = *num_entries - 1, inserted = 0;
 
 					if (hdr.leftmost_ptr != nullptr){
-						for (i = *num_entries-1; i>=hdr.first_index; i--){
+						for (i = *num_entries-1; i>=0; i--){
 							if (key < hdr.records[i].key){
 								hdr.records[i+1].ptr = hdr.records[i].ptr;
 								hdr.records[i+1].key = hdr.records[i].key;
@@ -617,13 +617,13 @@ class page{
       (btree* bt, char* left, entry_key_t key, char* right,
        bool flush, bool with_lock, page *invalid_sibling = nullptr) {
         if(with_lock) {
-          hdr.mtx->lock(); // Lock the write lock
-          // pthread_spin_lock(&hdr.slock);
+          // hdr.mtx->lock(); // Lock the write lock
+          pthread_spin_lock(&hdr.slock);
         }
         if(hdr.is_deleted) {
           if(with_lock) {
-            hdr.mtx->unlock();
-            // pthread_spin_unlock(&hdr.slock);
+            // hdr.mtx->unlock();
+            pthread_spin_unlock(&hdr.slock);
 
           }
 
@@ -635,9 +635,9 @@ class page{
           // Compare this key with the first key of the sibling
           if(key > hdr.right_sibling_ptr->hdr.records[0].key) {
             if(with_lock) { 
-              hdr.mtx->unlock(); // Unlock the write lock
+              // hdr.mtx->unlock(); // Unlock the write lock
               // hdr.slock->unlock();
-              // pthread_spin_unlock(&hdr.slock);
+              pthread_spin_unlock(&hdr.slock);
             }
             return hdr.right_sibling_ptr->store(bt, nullptr, key, right, 
                 true, with_lock, invalid_sibling);
@@ -651,9 +651,9 @@ class page{
           insert_key(key, right, &num_entries, flush);
 
           if(with_lock) {
-            hdr.mtx->unlock(); // Unlock the write lock
+            // hdr.mtx->unlock(); // Unlock the write lock
             // hdr.slock->unlock();
-            // pthread_spin_unlock(&hdr.slock);
+            pthread_spin_unlock(&hdr.slock);
           }
 
           return this;
@@ -723,16 +723,16 @@ class page{
             bt->setNewRoot((char *)new_root);
 
             if(with_lock) {
-              hdr.mtx->unlock(); // Unlock the write lock
+              // hdr.mtx->unlock(); // Unlock the write lock
               // hdr.slock->unlock();
-              // pthread_spin_unlock(&hdr.slock);
+              pthread_spin_unlock(&hdr.slock);
             }
           }
           else {
             if(with_lock) {
-              hdr.mtx->unlock(); // Unlock the write lock
+              // hdr.mtx->unlock(); // Unlock the write lock
               // hdr.slock->unlock();
-              // pthread_spin_unlock(&hdr.slock);
+              pthread_spin_unlock(&hdr.slock);
             }
             bt->btree_insert_internal(nullptr, split_key, (char *)sibling, 
                 hdr.level + 1);
