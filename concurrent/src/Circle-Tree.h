@@ -25,6 +25,8 @@
 #include <mutex>
 #include <pthread.h>
 
+#include "config.h"
+
 // #include <boost/atomic.hpp>
 
 // class spinlock {
@@ -46,9 +48,6 @@
 //     state_.store(Unlocked, boost::memory_order_release);
 //   }
 // };
-
-
-#define PAGESIZE 512
 
 #define CPU_FREQ_MHZ (1994)
 #define DELAY_IN_NS (1000)
@@ -144,7 +143,7 @@ class entry{
     friend class btree;
 };
 
-const int cardinality = 512;
+const int cardinality = record_size;
 
 class header{
   private:

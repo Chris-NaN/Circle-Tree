@@ -188,7 +188,7 @@ int main(int argc, char** argv)
   elapsedTime = (end.tv_sec-start.tv_sec)*1000000000 + (end.tv_nsec-start.tv_nsec);
   cout<<"Concurrent inserting and searching with " << n_threads << " threads (usec) : "<< elapsedTime / 1000 << endl; 
 #endif
-  bt->printAll();
+  //bt->printAll();
   delete bt;
   delete[] keys;
 
