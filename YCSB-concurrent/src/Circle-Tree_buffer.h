@@ -122,6 +122,7 @@ class entry{
 };
 
 const int cardinality = record_size;
+const int count_in_line = CACHE_LINE_SIZE / sizeof(entry);
 
 class header{
   private:
@@ -165,7 +166,7 @@ class header{
 
 
 
-const int count_in_line = CACHE_LINE_SIZE / sizeof(entry);
+
 
 class page{
   private:
