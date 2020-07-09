@@ -38,6 +38,105 @@ char* hmset(istringstream &ss){
     return vals;
 }
 
+long long insertion(btree *bt, char *load_path){
+    cout<<load_path<<endl;
+    struct timespec start, end;
+    ifstream ifs;
+    ifs.open(load_path);
+    if(!ifs) {
+        cout << "load_data_file loading error!" << endl;
+        exit(-1);  
+    }
+    string line, word, key;
+    int64_t i_key;
+    char * vals = nullptr;
+    const char* p_val = nullptr;
+    int offset;
+    long long load_time = 0, search_time = 0, update_time = 0;
+    while(getline(ifs, line)){
+        // cout<<line<<endl;
+        istringstream cut_word(line);
+        cut_word >> word;
+        if (word == "HMSET"){
+            cut_word >> key;  // user info
+            key = key.substr(key.length() - 9);
+            // cout << key << endl;
+            vals = hmset(cut_word);
+            i_key = stoi(key);
+            clock_gettime(CLOCK_MONOTONIC,&start);
+            bt->btree_insert(i_key, vals, -1);
+            clock_gettime(CLOCK_MONOTONIC,&end);
+            load_time += (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
+        }
+        
+        // return 0;
+    }
+    
+    // cout << load_time << endl;
+    ifs.close();
+    ifs.clear();
+    return load_time;
+}
+
+vector<long long> search_update(btree *bt, char *run_path){
+    ifstream ifs;
+    struct timespec start, end;
+    ifs.open(run_path);
+    if(!ifs) {
+        cout << "run_data_file loading error!" << endl;
+        exit(-1);  
+    }
+    string line, word, key;
+    int64_t i_key;
+    char * vals = nullptr;
+    const char* p_val = nullptr;
+    int offset;
+    long long load_time = 0, search_time = 0, update_time = 0;
+    // return 0;
+    while(getline(ifs, line)){
+        
+        // cout<<line<<endl;
+        istringstream cut_word(line);
+        cut_word >> word;
+        if (word == "HGETALL"){
+            cut_word >> key;  // user info
+            key = key.substr(key.length() - 9);
+            i_key = stoi(key);
+            clock_gettime(CLOCK_MONOTONIC,&start);
+            bt->btree_search(i_key, -1);
+            
+            clock_gettime(CLOCK_MONOTONIC,&end);
+            
+            search_time += (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
+            // cout<<"search test: "<<search_time<<endl;
+            // cout << key << endl;
+        }else if(word == "HMSET"){
+            
+            cut_word >> key;  // user info
+            key = key.substr(key.length() - 9);
+            cut_word >> word;  // field info
+            offset = *(word.end() - 1) - '0';
+            // cout << offset << endl;
+
+            cut_word >> word; // val info;
+            i_key = stoi(key);
+            // cout << key << endl;
+            p_val = word.c_str();
+            clock_gettime(CLOCK_MONOTONIC,&start);
+            bt->btree_update(i_key, p_val, offset);
+            clock_gettime(CLOCK_MONOTONIC,&end);
+            update_time += (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
+            
+            
+        }
+    }
+    vector<long long> rslt;
+    
+    rslt.push_back(search_time);
+    rslt.push_back(update_time);
+    return rslt;
+}
+
 int main(int argc, char** argv)
 {
 
@@ -79,144 +178,56 @@ int main(int argc, char** argv)
     entry_key_t* keys = new entry_key_t[num_data];
 
     ifstream ifs;
-    ifs.open(load_path);
-    if(!ifs) {
-        cout << "load_data_file loading error!" << endl;
+    // ifs.open(load_path);
+    // if(!ifs) {
+    //     cout << "load_data_file loading error!" << endl;
         
-        delete[] keys;
-        exit(-1);  
-    }
-    string line, word, key;
-    int64_t i_key;
-    char * vals = nullptr;
-    const char* p_val = nullptr;
-    int offset;
-    long long load_time = 0, search_time = 0, update_time = 0;
-    while(getline(ifs, line)){
-        // cout<<line<<endl;
-        istringstream cut_word(line);
-        cut_word >> word;
-        if (word == "HMSET"){
-            cut_word >> key;  // user info
-            key = key.substr(key.length() - 9);
-            // cout << key << endl;
-            vals = hmset(cut_word);
-            i_key = stoi(key);
-            clock_gettime(CLOCK_MONOTONIC,&start);
-            bt->btree_insert(i_key, vals, -1);
-            clock_gettime(CLOCK_MONOTONIC,&end);
-            load_time += (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
-        }
-        
-        // return 0;
-    }
-    
-    // cout << load_time << endl;
-    
-    ifs.close();
-    ifs.clear();
-    // bt->printAll();
-    ifs.open(run_path);
-    if(!ifs) {
-        cout << "run_data_file loading error!" << endl;
-        exit(-1);  
-    }
-    // return 0;
-    while(getline(ifs, line)){
-        
-        // cout<<line<<endl;
-        istringstream cut_word(line);
-        cut_word >> word;
-        if (word == "HGETALL"){
-            cut_word >> key;  // user info
-            key = key.substr(key.length() - 9);
-            i_key = stoi(key);
-            clock_gettime(CLOCK_MONOTONIC,&start);
-            bt->btree_search(i_key, -1);
-            
-            clock_gettime(CLOCK_MONOTONIC,&end);
-            search_time += (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
-            // cout << key << endl;
-        }else if(word == "HMSET"){
-            
-            cut_word >> key;  // user info
-            key = key.substr(key.length() - 9);
-            cut_word >> word;  // field info
-            offset = *(word.end() - 1) - '0';
-            // cout << offset << endl;
+    //     delete[] keys;
+    //     exit(-1);  
+    // }
 
-            cut_word >> word; // val info;
-            i_key = stoi(key);
-            // cout << key << endl;
-            p_val = word.c_str();
-            clock_gettime(CLOCK_MONOTONIC,&start);
-            bt->btree_update(i_key, p_val, offset);
-            clock_gettime(CLOCK_MONOTONIC,&end);
-            update_time += (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
-            
-            
-        }
+    vector<future<long long>> futures(n_threads);
+    long data_per_thread = num_data / n_threads;
+    for(int tid = 0; tid < n_threads; tid++) {
+        
+        string tmp_str = string(load_path) + "_" + to_string(tid) + ".txt";
+        char *tmp_char = (char *)tmp_str.data();
+        char *load_path_i = new char[50];
+        strcpy(load_path_i, tmp_char);
+        // char *load_path_i = (char *)tmp_str.data();
+        // TODO: copy load file into test/ and change this string.
+        // cout<<load_path_i<<endl;
+        auto f = async(launch::async,insertion , bt, load_path_i);
+        futures.push_back(move(f));
     }
-    cout << "FAST-FAIR: "<<endl;
-    load_time /= 1000, search_time /= 1000, update_time /= 1000;
-    cout << "load_time: " << load_time << " average load_time: " << load_time / float(num_data) <<endl;
-    cout << "search_time: " << search_time << " average search_time: " << search_time / float(num_data) <<endl;
-    cout << "update_time: " << update_time << " average update_time: " << update_time / float(num_data) <<endl;
-    // bt->printAll();
+    for(auto &&f : futures) 
+        if(f.valid())
+            cout<<(double)f.get()/(1000*num_data)<<endl; 
+    // bt->printAll();  
+    vector<future<vector<long long>>> futures_search(n_threads);
+    for(int tid = 0; tid < n_threads; tid++) {
+        
+        string tmp_str = string(run_path) + "_" + to_string(tid) + ".txt";
+        char *tmp_char = (char *)tmp_str.data();
+        char *run_path_i = new char[50];
+        strcpy(run_path_i, tmp_char);
+        // char *load_path_i = (char *)tmp_str.data();
+        // TODO: copy load file into test/ and change this string.
+        // cout<<load_path_i<<endl;
+        auto f = async(launch::async,search_update , bt, run_path_i);
+        futures_search.push_back(move(f));
+    }
+    for(auto &&f : futures_search) 
+        if(f.valid()){
+            vector<long long> rslt = f.get();
+            cout<<"search time:"<<(double)rslt[0]/(1000*num_data/2)<<endl;
+            // cout<<"search time:"<<(double)rslt[0]<<endl;
+            cout<<"update time:"<<(double)rslt[1]/(1000*num_data/2)<<endl; 
+        }
+    //bt->printAll();
     return 0;
 
-    for(int i=0; i<num_data; ++i)
-        ifs >> keys[i]; 
-
-    ifs.close();
-
-    {
-        clock_gettime(CLOCK_MONOTONIC,&start);
-        
-        for(int i = 0; i < num_data; ++i) {
-            char *val = new char[100];
-            val[0] = '1';
-            bt->btree_insert(keys[i], val, -1); 
-        }
-
-        clock_gettime(CLOCK_MONOTONIC,&end);
-
-        long long elapsed_time = 
-        (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
-        elapsed_time /= 1000;
-
-        printf("INSERT elapsed_time: %ld, Avg: %f\n", elapsed_time,
-            (double)elapsed_time / num_data);
-    }
-    // bt->btree_update(keys[5], (char*)keys[4], 0);
-    // bt->btree_update(keys[5], (char*)keys[3], 0);
-    // bt->btree_update(4, (char*) keys[5], 0);
-    clear_cache();
-
-    {
-    clock_gettime(CLOCK_MONOTONIC,&start);
-
-    for(int i = 0; i < num_data; ++i) {
-        bt->btree_search(keys[i], -1);
-    }
-
-    clock_gettime(CLOCK_MONOTONIC,&end);
-
-    long long elapsed_time = 
-        (end.tv_sec - start.tv_sec) * 1000000000 + (end.tv_nsec - start.tv_nsec);
-    elapsed_time /= 1000;
-
-    printf("SEARCH elapsed_time: %ld, Avg: %f\n", elapsed_time,
-        (double)elapsed_time / num_data);
-    }
-
-    bt->printAll();
-
-    
-
-
-    delete bt;
-    delete[] keys;
+   
 
     return 0;
 }
