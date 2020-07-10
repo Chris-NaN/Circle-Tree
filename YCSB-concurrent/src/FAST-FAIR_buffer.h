@@ -123,8 +123,8 @@ class header{
     header() {
       mtx = new std::mutex();
 
-      leftmost_ptr = NULL;  
-      sibling_ptr = NULL;
+      leftmost_ptr = nullptr;  
+      sibling_ptr = nullptr;
       switch_counter = 0;
       last_index = -1;
       is_deleted = false;
@@ -197,7 +197,7 @@ class page{
         previous_switch_counter = hdr.switch_counter;
         count = hdr.last_index + 1;
 
-        while(count >= 0 && records[count].ptr != NULL) {
+        while(count >= 0 && records[count].ptr != (uint64_t)nullptr) {
           if(IS_FORWARD(previous_switch_counter))
             ++count;
           else
@@ -206,7 +206,7 @@ class page{
 
         if(count < 0) {
           count = 0;
-          while(records[count].ptr != NULL) {
+          while(records[count].ptr != (uint64_t)nullptr) {
             ++count;
           }
         }
@@ -254,7 +254,7 @@ class page{
 			if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
 				do {
           previous_switch_counter = hdr.switch_counter;
-          ret = NULL;
+          ret = nullptr;
 
           // search from left ro right
           if(IS_FORWARD(previous_switch_counter)) { 
@@ -555,10 +555,10 @@ class page{
       uint64_t t;
       entry_key_t k;
 
-      if(hdr.leftmost_ptr == NULL) { // Search a leaf node
+      if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
         do {
           previous_switch_counter = hdr.switch_counter;
-          ret = NULL;
+          ret = nullptr;
 
           // search from left ro right
           if(IS_FORWARD(previous_switch_counter)) { 
@@ -606,7 +606,7 @@ class page{
 
             if(!ret) {
               if((k = records[0].key) == key) {
-                if(NULL != (t = records[0].ptr) && t) {
+                if((uint64_t)nullptr != (t = records[0].ptr) && t) {
                   if(k == records[0].key) {
                     ret = (char*)t;
                     continue;
@@ -624,13 +624,13 @@ class page{
         if((t = (uint64_t)hdr.sibling_ptr) && key >= ((page *)t)->records[0].key)
           return (char*)t;
 
-        return NULL;
+        return nullptr;
       }
       else { // internal node
       
         do {
           previous_switch_counter = hdr.switch_counter;
-          ret = NULL;
+          ret = nullptr;
 
           if(IS_FORWARD(previous_switch_counter)) {
             if(key < (k = buffer_records[0])) {
@@ -644,7 +644,7 @@ class page{
               if (key <= buffer_records[i]) break;
               begin_idx += count_in_line;
             }
-            for(i = begin_idx; records[i].ptr != NULL; ++i) { 
+            for(i = begin_idx; records[i].ptr != (uint64_t)nullptr; ++i) { 
               if(key < (k = records[i].key)) { 
                 if((t = records[i-1].ptr) != records[i].ptr) {
                   ret = (char*)t;
@@ -686,7 +686,7 @@ class page{
           }
         } while(hdr.switch_counter != previous_switch_counter);
 
-        if((t = (uint64_t)hdr.sibling_ptr) != NULL) {
+        if((t = (uint64_t)hdr.sibling_ptr) != (uint64_t)nullptr) {
           if(key >= ((page *)t)->records[0].key)
             return (char*)t;
         }
@@ -698,12 +698,12 @@ class page{
           return (char *)hdr.leftmost_ptr;
       }
 
-      return NULL;
+      return nullptr;
     }
 
     // print a node 
     void print() {
-      if(hdr.leftmost_ptr == NULL) 
+      if(hdr.leftmost_ptr == nullptr) 
         printf("[%d] leaf %x \n", this->hdr.level, this);
       else 
         printf("[%d] internal %x \n", this->hdr.level, this);
@@ -715,7 +715,7 @@ class page{
       else
         printf("<-\n");
 
-      if(hdr.leftmost_ptr!=NULL) 
+      if(hdr.leftmost_ptr!=nullptr) 
         printf("%x ",hdr.leftmost_ptr);
 
       for(int i=0;records[i].ptr != (uint64_t) nullptr;++i){
@@ -730,7 +730,7 @@ class page{
     }
 
     void printAll() {
-      if(hdr.leftmost_ptr==NULL) {
+      if(hdr.leftmost_ptr==nullptr) {
         printf("printing leaf node: ");
         print();
       }
