@@ -199,9 +199,13 @@ int main(int argc, char** argv)
         auto f = async(launch::async,insertion , bt, load_path_i);
         futures.push_back(move(f));
     }
-    for(auto &&f : futures) 
+    long long insertion_time = 0;
+    for(auto &&f : futures){
         if(f.valid())
-            cout<<"insertion time: "<<(double)f.get()/(1000*num_data)<<endl; 
+            insertion_time += f.get();
+    } 
+    insertion_time /= n_threads;
+    cout<<"insertion time: "<<(double)insertion_time/(1000*num_data)<<endl; 
     // bt->printAll();  
     vector<future<vector<long long>>> futures_search(n_threads);
     for(int tid = 0; tid < n_threads; tid++) {
@@ -216,13 +220,19 @@ int main(int argc, char** argv)
         auto f = async(launch::async,search_update , bt, run_path_i);
         futures_search.push_back(move(f));
     }
-    for(auto &&f : futures_search) 
+    long long search_time = 0, update_time = 0;
+    for(auto &&f : futures_search) {
         if(f.valid()){
             vector<long long> rslt = f.get();
-            cout<<"search time:"<<(double)rslt[0]/(1000*num_data/2)<<endl;
-            // cout<<"search time:"<<(double)rslt[0]<<endl;
-            cout<<"update time:"<<(double)rslt[1]/(1000*num_data/2)<<endl; 
+            search_time += rslt[0];
+            update_time += rslt[1];
         }
+    }
+    search_time /= n_threads;
+    update_time /= n_threads;
+    cout<<"search time:"<<(double)search_time/(1000*num_data/2)<<endl;
+    cout<<"update time:"<<(double)update_time/(1000*num_data/2)<<endl; 
+        
     //bt->printAll();
     return 0;
 
