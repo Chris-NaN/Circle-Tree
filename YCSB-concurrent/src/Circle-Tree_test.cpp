@@ -39,7 +39,6 @@ char* hmset(istringstream &ss){
 }
 
 long long insertion(btree *bt, char *load_path){
-    cout<<load_path<<endl;
     struct timespec start, end;
     ifstream ifs;
     ifs.open(load_path);
@@ -202,7 +201,7 @@ int main(int argc, char** argv)
     }
     for(auto &&f : futures) 
         if(f.valid())
-            cout<<(double)f.get()/(1000*num_data)<<endl; 
+            cout<<"insertion time: "<<(double)f.get()/(1000*num_data)<<endl; 
     // bt->printAll();  
     vector<future<vector<long long>>> futures_search(n_threads);
     for(int tid = 0; tid < n_threads; tid++) {
@@ -224,7 +223,7 @@ int main(int argc, char** argv)
             // cout<<"search time:"<<(double)rslt[0]<<endl;
             cout<<"update time:"<<(double)rslt[1]/(1000*num_data/2)<<endl; 
         }
-    bt->printAll();
+    // bt->printAll();
     return 0;
 
    

@@ -4,7 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
-#include "FAST-FAIR_buffer.h"
+#include "FAST-FAIR_fp.h"
 using namespace std;
 
 #pragma comment(linker, "/STACK:102400000,102400000")
