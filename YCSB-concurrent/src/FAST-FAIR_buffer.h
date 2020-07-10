@@ -559,141 +559,68 @@ class page{
       char *ret = nullptr;
       uint64_t t;
       entry_key_t k;
+      int up_limit = cardinality / count_in_line;
 
       if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
-        do {
-          previous_switch_counter = hdr.switch_counter;
-          ret = nullptr;
+        ret = NULL;
 
-          // search from left ro right
-          if(IS_FORWARD(previous_switch_counter)) { 
-            if((k = buffer_records[0]) == key) {
-              if((t = records[0].ptr) != (uint64_t)nullptr) {
-                if(k == records[0].key) {
-                  ret = (char*)t;
-                  continue;
-                }
-              }
-            }
-            int begin_idx = 1;
-            for (i=1; i <= hdr.last_index / count_in_line; i++){
-              if (key <= buffer_records[i]) break;
-              begin_idx += count_in_line;
-            }
-            for(i=begin_idx; records[i].ptr != (uint64_t)nullptr; ++i) { 
-              if((k = records[i].key) == key) {
-                if(records[i-1].ptr != (t = records[i].ptr)) {
-                  if(k == records[i].key) {
-                    ret = (char*)t;
-                    break;
-                  }
-                }
+        // search from left ro right
+        int begin_idx = 0;
+        for (i=1; i <= hdr.last_index / count_in_line && i<up_limit; i++){
+          if (key < buffer_records[i]) break;
+          begin_idx += count_in_line;
+        }
+        for(i=begin_idx; records[i].ptr != NULL; ++i) { 
+          if((k = records[i].key) == key) {
+            if(records[i-1].ptr != (t = records[i].ptr)) {
+              if(k == records[i].key) {
+                ret = (char *)t;
+                break;
               }
             }
           }
-          else { // search from right to left
-            int begin_idx = 0;
-            for (i=1; i <= hdr.last_index / count_in_line; i++){
-              begin_idx += count_in_line;
-              if (key < buffer_records[i]) break;
-            }
-            i = begin_idx <= count()-1? begin_idx : hdr.last_index;
-            for(; i > 0; --i) {
-              if((k = records[i].key) == key) {
-                if(records[i - 1].ptr != (t = records[i].ptr) && t) {
-                  if(k == records[i].key) {
-                    ret = (char*)t;
-                    break;
-                  }
-                }
-              }
-            }
+        }
 
-            if(!ret) {
-              if((k = records[0].key) == key) {
-                if((uint64_t)nullptr != (t = records[0].ptr) && t) {
-                  if(k == records[0].key) {
-                    ret = (char*)t;
-                    continue;
-                  }
-                }
-              }
-            }
-          }
-        } while(hdr.switch_counter != previous_switch_counter);
 
         if(ret) {
           return ret;
         }
 
         if((t = (uint64_t)hdr.sibling_ptr) && key >= ((page *)t)->records[0].key)
-          return (char*)t;
+          return (char *)t;
 
-        return nullptr;
+        return NULL;
       }
       else { // internal node
       
-        do {
-          previous_switch_counter = hdr.switch_counter;
-          ret = nullptr;
+        ret = NULL;
 
-          if(IS_FORWARD(previous_switch_counter)) {
-            if(key < (k = buffer_records[0])) {
-              if((t = (uint64_t)hdr.leftmost_ptr) != records[0].ptr) { 
-                ret = (char*)t;
-                continue;
-              }
-            }
-            int begin_idx = 1;
-            for (int i=1; i < count() / count_in_line; i++){
-              if (key <= buffer_records[i]) break;
-              begin_idx += count_in_line;
-            }
-            for(i = begin_idx; records[i].ptr != (uint64_t)nullptr; ++i) { 
-              if(key < (k = records[i].key)) { 
-                if((t = records[i-1].ptr) != records[i].ptr) {
-                  ret = (char*)t;
-                  break;
-                }
-              }
-            }
-
-            if(!ret) {
-              ret = (char*)records[i - 1].ptr; 
-              continue;
-            }
+        if(key < (k = buffer_records[0])) {
+          ret = (char*) hdr.leftmost_ptr;    
+        }else{
+          int begin_idx = 1;
+          for (int i=1; i < count() / count_in_line && i<up_limit; i++){
+            if (key < buffer_records[i]) break;
+            begin_idx += count_in_line;
           }
-          else { // search from right to left
-            int begin_idx = 0;
-            for (int i=1; i < count() / count_in_line; i++){
-              begin_idx += count_in_line;
-              if (key < buffer_records[i]) break;
-              
-            }
-            i = begin_idx < count() ? begin_idx : count()-1;
-
-            for(; i >= 0; --i) {
-              if(key >= (k = records[i].key)) {
-                if(i == 0) {
-                  if((uint64_t)hdr.leftmost_ptr != (t = records[i].ptr)) {
-                    ret = (char*)t;
-                    break;
-                  }
-                }
-                else {
-                  if(records[i - 1].ptr != (t = records[i].ptr)) {
-                    ret = (char*)t;
-                    break;
-                  }
-                }
+          for(i = begin_idx; records[i].ptr != NULL; ++i) { 
+            if(key < (k = records[i].key)) { 
+              if((t = records[i-1].ptr) != records[i].ptr) {
+                ret = (char *)t;
+                break;
               }
             }
           }
-        } while(hdr.switch_counter != previous_switch_counter);
+        }
+        
 
-        if((t = (uint64_t)hdr.sibling_ptr) != (uint64_t)nullptr) {
+        if(!ret) {
+          ret = (char *)records[i - 1].ptr; 
+        }
+
+        if((t = (uint64_t)hdr.sibling_ptr) != NULL) {
           if(key >= ((page *)t)->records[0].key)
-            return (char*)t;
+            return (char *)t;
         }
 
         if(ret) {
@@ -703,7 +630,7 @@ class page{
           return (char *)hdr.leftmost_ptr;
       }
 
-      return nullptr;
+      return NULL;
     }
 
     // print a node 
