@@ -444,6 +444,11 @@ class page{
         if(hdr.sibling_ptr && (hdr.sibling_ptr != invalid_sibling)) {
           // Compare this key with the first key of the sibling
           if(key > hdr.sibling_ptr->records[0].key) {
+            if(with_lock) { 
+              hdr.mtx->unlock(); // Unlock the write lock
+              // hdr.slock->unlock();
+              // pthread_spin_unlock(&hdr.slock);
+            }
             return hdr.sibling_ptr->store(bt, nullptr, key, right, offset, 
 								true, invalid_sibling);
           }
