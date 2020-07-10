@@ -591,10 +591,11 @@ class page{
       char *ret = nullptr;
       char *t;
       entry_key_t k;
+      int up_limit = cardinality / count_in_line;
 
       if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
         int begin_idx = 0;
-        for (i = 1; i < count() / count_in_line; i++){
+        for (i = 1; i < count() / count_in_line && i<up_limit; i++){
           if (key < hdr.buffer_records[i]) break;
           begin_idx += count_in_line;
         }
@@ -618,7 +619,7 @@ class page{
           ret = (char *)hdr.leftmost_ptr;
         } else {
           int begin_idx = 1;
-          for (int i=1; i<count()/count_in_line; i++){
+          for (int i=1; i<count()/count_in_line && i<up_limit; i++){
             if (key < hdr.buffer_records[i]) break;
             begin_idx += count_in_line;
           }
