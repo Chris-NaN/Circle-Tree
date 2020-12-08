@@ -102,18 +102,21 @@ int main(int argc, char** argv)
 
     ifs.close();
     // My Code
-    ifs.open(uniform_input);
-    if(!ifs) {
-        cout << "uniform input loading error!" << endl;
+    if (uniform_input){
+        ifs.open(uniform_input);
+        if(!ifs) {
+            cout << "uniform input loading error!" << endl;
 
-        delete[] uniform_keys;
-        exit(-1);
+            delete[] uniform_keys;
+            exit(-1);
+        }
+
+        for(int i=0; i<num_data; ++i)
+            ifs >> uniform_keys[i]; 
+
+        ifs.close();
     }
-
-    for(int i=0; i<num_data; ++i)
-        ifs >> uniform_keys[i]; 
-
-    ifs.close();
+    
 
     {
         clock_gettime(CLOCK_MONOTONIC,&start);

@@ -25,6 +25,7 @@
 #include <mutex>
 #include <algorithm>
 #include "config.h"
+#include <cstdlib>
 
 #define CPU_FREQ_MHZ (1566)
 #define DELAY_IN_NS (1000)
@@ -147,11 +148,20 @@ const int cardinality = (PAGESIZE-sizeof(header))/sizeof(entry);
 const int count_in_line = CACHE_LINE_SIZE / sizeof(entry);
 
 // My Code: 
+typedef struct content_node{
+  int64_t left_key;
+  int64_t right_key;
+  page* ptr;
+  bool accessed;
+}node;
 const uint32_t tbl_nums = 256;
 const uint32_t size_per_line = 4; // word allign to 32
 uint32_t item_nums = 0;  // <= 10
 uint32_t clock_idx = 0;
-int64_t content_tbl[tbl_nums][size_per_line];  // (left key, right key), node pointer, valid bit;
+int64_t min_key = INT64_MIN;
+int64_t max_key = INT64_MAX;
+unsigned seed = time(0);
+node content_tbl[tbl_nums];  // (left key, right key), node pointer, valid bit;
 
 class page{
   private:
@@ -805,57 +815,87 @@ void btree::setNewRoot(char *new_root) {
   ++height;
 }
 
+
+
 page* search_tbl(entry_key_t key){
     assert(item_nums <= tbl_nums);
     page* p = nullptr;
     // add bloom filter
-    if (item_nums < tbl_nums) return p;
-    int idx = clock_idx;
-    // int idx = 0;
-    int count = 0;
-    while (count++ < item_nums){
-        int64_t left_key = content_tbl[idx][0];
-        int64_t right_key = content_tbl[idx][1];
-        if (left_key <= key && key < right_key){
-            p = (page *)content_tbl[idx][2];
-            content_tbl[idx][3] = 1;
-            // clock_idx = idx;
-            break;
-        }
-        idx = (idx + 1) % item_nums;
-        // idx++;
+    // if (item_nums < tbl_nums) return p;
+    if (key < min_key || key > max_key) return p;
+    for (int i=0; i<item_nums; i++){
+      int64_t left_key = content_tbl[i].left_key;
+      int64_t right_key = content_tbl[i].right_key;
+      if (left_key <= key && key < right_key){
+        p = content_tbl[i].ptr;
+        content_tbl[i].accessed = true;
+        clock_idx = (i+1) % item_nums;
+        break;
+      }
     }
     return p;
 }
 void updateTbl(entry_key_t left, entry_key_t right, page *ptr){
     
     if (item_nums < tbl_nums){
-        content_tbl[item_nums][0] = left;
-        content_tbl[item_nums][1] = right;
-        content_tbl[item_nums][2] = (int64_t)ptr;
-        content_tbl[item_nums][3] = 0;
+        content_tbl[item_nums].left_key = left;
+        content_tbl[item_nums].right_key = right;
+        content_tbl[item_nums].ptr = ptr;
+        content_tbl[item_nums].accessed = false;
+        node tmp = content_tbl[item_nums];
+        for (int i=item_nums-1; i>0; i--){
+          if (content_tbl[i].left_key > left){
+            content_tbl[i] = content_tbl[i-1];
+          } else {
+            content_tbl[i] = tmp;
+            break;
+          }
+        }
         item_nums++;
     }else{
-        
+        // srand(seed);
         int idx = clock_idx;
         int count = 0;
         while (count++ <= item_nums){
-            
-            if (content_tbl[idx][3] == 0){
-                content_tbl[idx][0] = left;
-                content_tbl[idx][1] = right;
-                content_tbl[idx][2] = (int64_t)ptr;
-                content_tbl[idx][3] = 0;
+            if (content_tbl[idx].accessed == 0){
+                bool go_down = (content_tbl[idx].left_key < left);
+                content_tbl[idx].left_key = left;
+                content_tbl[idx].right_key = right;
+                content_tbl[idx].ptr = ptr;
+                content_tbl[idx].accessed = false;
+                node tmp = content_tbl[idx];
+                if (go_down){
+                  for (int i=idx+1; i<item_nums-1; i++){
+                    if (content_tbl[i].left_key < left){
+                      content_tbl[i] = content_tbl[i+1];
+                    }else{
+                      content_tbl[i] = tmp;
+                      break;
+                    }
+                  }
+                }else{
+                  for (int i=idx-1; i>0; i--){
+                    if (content_tbl[i].left_key > left){
+                      content_tbl[i] = content_tbl[i-1];
+                    } else {
+                      content_tbl[i] = tmp;
+                      break;
+                    }
+                  }
+                }
                 clock_idx = (idx+1) % item_nums;
                 // printf("tbl update successful.\n");
                 break;
             }else{
                 // printf("tbl update successful----.\n");
-                content_tbl[idx][3] = 0;
+                content_tbl[idx].accessed = false;
             }
+            // idx++;
             idx = (idx+1) % item_nums;
         }
     }
+    min_key = content_tbl[0].left_key;
+    max_key = content_tbl[item_nums-1].right_key;
     
 }
 
