@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <time.h>
 #include <fstream>
-#include "B+Tree.h"
+#include "B+Tree_content_sensitive.h"
 using namespace std;
 
 #pragma comment(linker, "/STACK:102400000,102400000")
@@ -137,17 +137,19 @@ int main(int argc, char** argv)
     {
     clock_gettime(CLOCK_MONOTONIC,&start);
 
-    // for(int i = 0; i < num_data; ++i) {
-    //     bt->btree_search(keys[i]);
-    // }
-    for(int i = 0; i < num_data; ++i) {
-        bt->btree_search(uniform_keys[i]);
-    }
+
     // int mid = num_data/2;
     // for (int i=0; i<10; i++){
     //     for(int i = mid; i < mid+200000 && i<num_data; ++i) {
     //         bt->btree_search(i);
     //     }
+    // }
+    
+    for(int i = 0; i < num_data; ++i) {
+        bt->btree_search(uniform_keys[i]);
+    }
+    // for(int i = 0; i<num_data; ++i) {
+    //     bt->btree_search(keys[i]);
     // }
 
     clock_gettime(CLOCK_MONOTONIC,&end);
@@ -160,7 +162,7 @@ int main(int argc, char** argv)
         (double)elapsed_time / num_data);
     }
 
-    //bt->printAll();
+    bt->printAll();
 
     
 

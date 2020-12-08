@@ -55,9 +55,10 @@ int main(int argc, char** argv)
     int n_threads = 1;
     float selection_ratio = 0.0f;
     char *input_path = (char *)std::string("../sample_input.txt").data();
+    char *uniform_input = nullptr;
 
     int c;
-    while((c = getopt(argc, argv, "n:w:t:s:i:")) != -1) {
+    while((c = getopt(argc, argv, "n:w:t:s:i:u:")) != -1) {
         switch(c) {
         case 'n':
             num_data = atoi(optarg);
@@ -72,6 +73,8 @@ int main(int argc, char** argv)
             selection_ratio = atof(optarg);
         case 'i':
             input_path = optarg;
+        case 'u':
+            uniform_input = optarg;
         default:
             break;
         }
@@ -95,6 +98,7 @@ int main(int argc, char** argv)
 
     // Reading data
     entry_key_t* keys = new entry_key_t[num_data];
+    entry_key_t* uniform_keys = new entry_key_t[num_data];
 
     ifstream ifs;
     ifs.open(input_path);
@@ -107,6 +111,19 @@ int main(int argc, char** argv)
 
     for(int i=0; i<num_data; ++i)
         ifs >> keys[i]; 
+
+    ifs.close();
+    // My Code
+    ifs.open(uniform_input);
+    if(!ifs) {
+        cout << "uniform input loading error!" << endl;
+
+        delete[] uniform_keys;
+        exit(-1);
+    }
+
+    for(int i=0; i<num_data; ++i)
+        ifs >> uniform_keys[i]; 
 
     ifs.close();
 
@@ -152,9 +169,18 @@ int main(int argc, char** argv)
     {
     clock_gettime(CLOCK_MONOTONIC,&start);
 
+    // for(int i = 0; i < num_data; ++i) {
+    //     bt->btree_search(keys[i]);
+    // }
     for(int i = 0; i < num_data; ++i) {
-        bt->btree_search(keys[i]);
+        bt->btree_search(uniform_keys[i]);
     }
+    // int mid = num_data/2;
+    // for (int i=0; i<10; i++){
+    //     for(int i = mid; i < mid+200000 && i<num_data; ++i) {
+    //         bt->btree_search(i);
+    //     }
+    // }
 
     clock_gettime(CLOCK_MONOTONIC,&end);
 
@@ -173,6 +199,6 @@ int main(int argc, char** argv)
 
     delete bt;
     delete[] keys;
-
+    delete[] uniform_keys;
     return 0;
 }
