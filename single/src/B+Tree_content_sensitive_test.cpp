@@ -164,6 +164,7 @@ int main(int argc, char** argv)
     printf("SEARCH elapsed_time: %ld, Avg: %f\n", elapsed_time,
         (double)elapsed_time / num_data);
     }
+    printf("Avg accesses ratio: %f\n", (double)ref_count/num_data);
 
     bt->printAll();
 

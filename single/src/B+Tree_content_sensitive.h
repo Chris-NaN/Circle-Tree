@@ -148,20 +148,42 @@ const int cardinality = (PAGESIZE-sizeof(header))/sizeof(entry);
 const int count_in_line = CACHE_LINE_SIZE / sizeof(entry);
 
 // My Code: 
-typedef struct content_node{
+class node{
+  public:
+
   int64_t left_key;
   int64_t right_key;
   page* ptr;
   bool accessed;
-}node;
-const uint32_t tbl_nums = 256;
+  void *operator new(size_t size) {
+    void *ret;
+    posix_memalign(&ret,64,size);
+    return ret;
+  }
+};
+class list_node{
+  public:
+    int64_t left_key;
+    int64_t right_key;
+    page* ptr;
+    bool accessed = false;
+    list_node* prev=nullptr;
+    list_node* next=nullptr;
+    list_node(int64_t left, int64_t right, page* ptr)
+    :left_key(left), right_key(right), ptr(ptr){};
+};
+const uint32_t tbl_nums = 128;
 const uint32_t size_per_line = 4; // word allign to 32
 uint32_t item_nums = 0;  // <= 10
 uint32_t clock_idx = 0;
 int64_t min_key = INT64_MIN;
 int64_t max_key = INT64_MAX;
 unsigned seed = time(0);
+list_node* header_ptr=nullptr;
+list_node* tail_ptr=nullptr;
 node content_tbl[tbl_nums];  // (left key, right key), node pointer, valid bit;
+
+uint64_t ref_count = 0;
 
 class page{
   private:
@@ -822,33 +844,40 @@ page* search_tbl(entry_key_t key){
     page* p = nullptr;
     // add bloom filter
     // if (item_nums < tbl_nums) return p;
+    
     if (key < min_key || key > max_key) return p;
-    for (int i=0; i<item_nums; i++){
-      int64_t left_key = content_tbl[i].left_key;
-      int64_t right_key = content_tbl[i].right_key;
+    
+    list_node* it = header_ptr;
+    for (int i=0; i<item_nums && it; i++){
+      int64_t left_key = it->left_key;
+      int64_t right_key = it->right_key;
       if (left_key <= key && key < right_key){
-        p = content_tbl[i].ptr;
-        content_tbl[i].accessed = true;
-        clock_idx = (i+1) % item_nums;
+        p = it->ptr;
+        it->accessed = true;
+        ref_count++;
+        // clock_idx = (i+1) % item_nums;
         break;
       }
+      it = it->next;
     }
     return p;
 }
 void updateTbl(entry_key_t left, entry_key_t right, page *ptr){
     
     if (item_nums < tbl_nums){
-        content_tbl[item_nums].left_key = left;
-        content_tbl[item_nums].right_key = right;
-        content_tbl[item_nums].ptr = ptr;
-        content_tbl[item_nums].accessed = false;
-        node tmp = content_tbl[item_nums];
-        for (int i=item_nums-1; i>0; i--){
-          if (content_tbl[i].left_key > left){
-            content_tbl[i] = content_tbl[i-1];
-          } else {
-            content_tbl[i] = tmp;
-            break;
+        list_node* new_node = new list_node(left, right, ptr);
+        if(item_nums == 0){
+          header_ptr = new_node;
+          tail_ptr = header_ptr;
+        }else{
+          if (tail_ptr == header_ptr){
+            tail_ptr = new_node;
+            header_ptr->next = tail_ptr;
+            tail_ptr->prev = header_ptr;
+          }else{
+            tail_ptr->next = new_node;
+            new_node->prev = tail_ptr;
+            tail_ptr = new_node;
           }
         }
         item_nums++;
@@ -856,46 +885,40 @@ void updateTbl(entry_key_t left, entry_key_t right, page *ptr){
         // srand(seed);
         int idx = clock_idx;
         int count = 0;
-        while (count++ <= item_nums){
-            if (content_tbl[idx].accessed == 0){
-                bool go_down = (content_tbl[idx].left_key < left);
-                content_tbl[idx].left_key = left;
-                content_tbl[idx].right_key = right;
-                content_tbl[idx].ptr = ptr;
-                content_tbl[idx].accessed = false;
-                node tmp = content_tbl[idx];
-                if (go_down){
-                  for (int i=idx+1; i<item_nums-1; i++){
-                    if (content_tbl[i].left_key < left){
-                      content_tbl[i] = content_tbl[i+1];
-                    }else{
-                      content_tbl[i] = tmp;
-                      break;
-                    }
-                  }
-                }else{
-                  for (int i=idx-1; i>0; i--){
-                    if (content_tbl[i].left_key > left){
-                      content_tbl[i] = content_tbl[i-1];
-                    } else {
-                      content_tbl[i] = tmp;
-                      break;
-                    }
-                  }
-                }
-                clock_idx = (idx+1) % item_nums;
-                // printf("tbl update successful.\n");
-                break;
-            }else{
-                // printf("tbl update successful----.\n");
-                content_tbl[idx].accessed = false;
+        list_node* it = header_ptr;
+        while (count++ <= item_nums && it){
+            if (!it->accessed){
+              bool go_right = (it->left_key < left);
+              it->left_key = left;
+              it->right_key = right;
+              it->ptr = ptr;
+              list_node* tmp;
+              if (go_right){
+                if (it == tail_ptr) break;
+                tmp = it->next;
+                while(tmp->next && tmp->left_key < left) tmp = tmp->next;
+                // if (tmp == tail_ptr) tail_ptr = it;
+                swap(it->left_key, tmp->left_key);
+                swap(it->right_key, tmp->right_key);
+                swap(it->ptr, tmp->ptr);
+              }else{
+                if (it == header_ptr) break;
+                tmp = it->prev;
+                while(tmp->prev && tmp->left_key > left) tmp = tmp->next;
+                // if (tmp == header_ptr) header_ptr = it;
+                swap(it->left_key, tmp->left_key);
+                swap(it->right_key, tmp->right_key);
+                swap(it->ptr, tmp->ptr);
+              }
+              break;
             }
+            it = it->next;
             // idx++;
-            idx = (idx+1) % item_nums;
+            // idx = (idx+1) % item_nums;
         }
     }
-    min_key = content_tbl[0].left_key;
-    max_key = content_tbl[item_nums-1].right_key;
+    min_key = header_ptr->left_key;
+    max_key = tail_ptr->right_key;
     
 }
 
