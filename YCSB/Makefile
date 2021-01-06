@@ -10,12 +10,13 @@ output = FAST-FAIR FAST-FAIR_buffer Circle-Tree Circle-Tree_buffer FP-Tree FAST-
 all: main
 
 main: src/test.cpp
-	#g++ $(CFLAGS) -o FAST-FAIR src/FAST-FAIR_test.cpp $(LIBS)
-	#g++ $(CFLAGS) -o FAST-FAIR_buffer src/FAST-FAIR_buffer_test.cpp $(LIBS)
+	g++ $(CFLAGS) -o FAST-FAIR src/FAST-FAIR_test.cpp $(LIBS)
+	g++ $(CFLAGS) -o FAST-FAIR_buffer src/FAST-FAIR_buffer_test.cpp $(LIBS)
+	g++ $(CFLAGS) -o FAST-FAIR_content_sensitive src/FAST-FAIR_CS_test.cpp $(LIBS)
 	#g++ $(CFLAGS) -o Circle-Tree src/Circle-Tree_test.cpp $(LIBS)
 	#g++ $(CFLAGS) -o Circle-Tree_buffer src/Circle-Tree_buffer_test.cpp $(LIBS)
 	#g++ $(CFLAGS) -o FP-Tree src/FP-Tree_test.cpp $(LIBS)
-	g++ $(CFLAGS) -o FAST-FAIR_fp src/FAST-FAIR_fp_test.cpp $(LIBS)
+	#g++ $(CFLAGS) -o FAST-FAIR_fp src/FAST-FAIR_fp_test.cpp $(LIBS)
 
 clean: 
 	rm $(output)

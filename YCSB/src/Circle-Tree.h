@@ -732,59 +732,58 @@ class page{
 			}
 
 		char *linear_search(entry_key_t key, int offset) {
-                                int i = 1;
-                                char *ret = nullptr;
-																char *in_ret = nullptr;
-                                char *t;
-                                entry_key_t k;
+			int i = 1;
+			char *ret = nullptr;
+			char *in_ret = nullptr;
+			char *t;
+			entry_key_t k;
 
-                                if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
-                                        for (i = 0; i < count(); ++i)
-                                                if (key == hdr.records[(hdr.first_index + i) & (cardinality - 1)].key) {
-                                                        ret = (char *)hdr.records[(hdr.first_index + i) & (cardinality - 1)].ptr;
-                                                        break;
-                                                }
-                                        if(ret) {
-                                                // return offset<0? ret : ret + (offset * field_size);
-																								return ret;
-                                        }
-                                        if((t = (char *)hdr.right_sibling_ptr) != nullptr && key >= ((page *)t)->hdr.records[(((page *)t)->hdr).first_index].key)
-                                                return t;
+			if(hdr.leftmost_ptr == nullptr) { // Search a leaf node
+				for (i = 0; i < count(); ++i)
+					if (key == hdr.records[(hdr.first_index + i) & (cardinality - 1)].key) {
+							ret = (char *)hdr.records[(hdr.first_index + i) & (cardinality - 1)].ptr;
+							break;
+					}
+				if(ret) {
+					// return offset<0? ret : ret + (offset * field_size);
+					return ret;
+				}
+				if((t = (char *)hdr.right_sibling_ptr) != nullptr && key >= ((page *)t)->hdr.records[(((page *)t)->hdr).first_index].key)
+					return t;
 
-                                        return nullptr;
-                                }
-                                else { // internal node, which you do not have circular design. -- wangc@2020.03.22
-                                        in_ret = nullptr;
+				return nullptr;
+			}
+			else { // internal node, which you do not have circular design. -- wangc@2020.03.22
+				in_ret = nullptr;
 
-                                        if(key < (k = hdr.records[0].key)) {
-                                                in_ret = (char *)hdr.leftmost_ptr;
-                                        } else {
+				if(key < (k = hdr.records[0].key)) {
+					in_ret = (char *)hdr.leftmost_ptr;
+				} else {
+					for(i = 1; i < count(); ++i) {
+						if(key < (k = hdr.records[i].key)) {
+							in_ret = (char *)hdr.records[i - 1].ptr;
+							break;
+						}
+					}
 
-                                                for(i = 1; i < count(); ++i) {
-                                                        if(key < (k = hdr.records[i].key)) {
-                                                                in_ret = (char *)hdr.records[i - 1].ptr;
-                                                                break;
-                                                        }
-                                                }
+					if(!ret) {
+						in_ret = (char *)hdr.records[i - 1].ptr;
+					}
+				}
+				if ((t = (char *)hdr.right_sibling_ptr) != nullptr) {
+					if(key >= ((page *)t)->hdr.records[0].key)
+						return t;
+				}
 
-                                                if(!ret) {
-                                                        in_ret = (char *)hdr.records[i - 1].ptr;
-                                                }
-                                        }
-                                        if ((t = (char *)hdr.right_sibling_ptr) != nullptr) {
-                                                if(key >= ((page *)t)->hdr.records[0].key)
-                                                        return t;
-                                        }
+				if (in_ret) {
+					return in_ret;
+				} else {
+					return (char *)hdr.leftmost_ptr;
+				}
+			}
 
-                                        if (in_ret) {
-                                                return in_ret;
-                                        } else {
-                                                return (char *)hdr.leftmost_ptr;
-                                        }
-                                }
-
-                                return nullptr;
-                        }
+			return nullptr;
+		}
 
 		// print a node 
 		void print() {
