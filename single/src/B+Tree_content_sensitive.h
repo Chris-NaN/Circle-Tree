@@ -81,8 +81,28 @@ inline void clflush(char *data, int len)
   mfence();
 }
 
+// My Code:
+#define MASK_bits (((u_int32_t)1<<8)-1) /* i.e., (u_int32_t)64 */
+#define FNV1_32_INIT ((u_int32_t)2166136261)
+#define EXCEPT_LAST_12_BITS_MASK (0xffffff00)
+// FNV-1a hash function
+uint32_t fnv_32(uint64_t key){
+    key = key >> 8;
+    // return key;
+    uint32_t hval = FNV1_32_INIT;
+    while (key)
+    {
+        unsigned char s = key & 0xff;
+        hval += (hval<<1) + (hval<<4) + (hval<<7) + (hval<<8) + (hval<<24);
+        hval ^= (uint32_t)s;
+        key = key >> 0xff;
+    }
+    // return hval;
+    return (hval & MASK_bits);
+}
+
 class page;
-void updateTbl(entry_key_t left, entry_key_t right, page *ptr);
+void updateTbl(entry_key_t left, entry_key_t right, entry_key_t key, page *ptr);
 
 class btree{
   private:
@@ -148,40 +168,19 @@ const int cardinality = (PAGESIZE-sizeof(header))/sizeof(entry);
 const int count_in_line = CACHE_LINE_SIZE / sizeof(entry);
 
 // My Code: 
-class node{
-  public:
-
-  int64_t left_key;
-  int64_t right_key;
-  page* ptr;
-  bool accessed;
-  void *operator new(size_t size) {
-    void *ret;
-    posix_memalign(&ret,64,size);
-    return ret;
-  }
-};
-class list_node{
-  public:
-    int64_t left_key;
-    int64_t right_key;
-    page* ptr;
-    bool accessed = false;
-    list_node* prev=nullptr;
-    list_node* next=nullptr;
-    list_node(int64_t left, int64_t right, page* ptr)
-    :left_key(left), right_key(right), ptr(ptr){};
-};
-const uint32_t tbl_nums = 128;
-const uint32_t size_per_line = 4; // word allign to 32
+typedef struct hash_table{
+    uint64_t left = 0;
+    uint64_t right = 0;
+    page * ptr = nullptr;
+    uint64_t ref = 0;  // 1B: first bit is valid bit, another 7 bits are reference counter.
+} hash_tbl;
+const uint32_t tbl_nums = 256;
+const uint32_t lines_per_tbl = 2; // word allign to 32
 uint32_t item_nums = 0;  // <= 10
 uint32_t clock_idx = 0;
 int64_t min_key = INT64_MIN;
 int64_t max_key = INT64_MAX;
-unsigned seed = time(0);
-list_node* header_ptr=nullptr;
-list_node* tail_ptr=nullptr;
-node content_tbl[tbl_nums];  // (left key, right key), node pointer, valid bit;
+hash_tbl content_tbl[tbl_nums][lines_per_tbl];  // (left key, right key), node pointer, valid bit;
 
 uint64_t ref_count = 0;
 
@@ -755,7 +754,7 @@ class page{
             if((t = records[i-1].ptr) != records[i].ptr) {
               ret = t;
               pg = (page*) ret;
-              if (pg->hdr.leftmost_ptr == NULL) updateTbl(records[i-1].key, k, pg);
+              if (pg->hdr.leftmost_ptr == NULL) updateTbl(records[i-1].key, k, key,pg);
               break;
             }
           }
@@ -847,78 +846,43 @@ page* search_tbl(entry_key_t key){
     
     if (key < min_key || key > max_key) return p;
     
-    list_node* it = header_ptr;
-    for (int i=0; i<item_nums && it; i++){
-      int64_t left_key = it->left_key;
-      int64_t right_key = it->right_key;
-      if (left_key <= key && key < right_key){
-        p = it->ptr;
-        it->accessed = true;
-        ref_count++;
-        // clock_idx = (i+1) % item_nums;
-        break;
-      }
-      it = it->next;
+    uint32_t hash_idx = fnv_32(key);
+    bool isValid = 0;
+    hash_tbl* tbl;
+    for (int i=0; i<lines_per_tbl; i++){
+        // tbl = &content_tbl[hash_idx][i];
+        isValid = content_tbl[hash_idx][i].ref;
+        if (!isValid) break;
+        // ref_count++;
+        if (content_tbl[hash_idx][i].left < key && key <= content_tbl[hash_idx][i].right){
+            content_tbl[hash_idx][i].ref++;
+            p = content_tbl[hash_idx][i].ptr;
+            ref_count++;
+            break;
+        }
     }
     return p;
 }
-void updateTbl(entry_key_t left, entry_key_t right, page *ptr){
-    
-    if (item_nums < tbl_nums){
-        list_node* new_node = new list_node(left, right, ptr);
-        if(item_nums == 0){
-          header_ptr = new_node;
-          tail_ptr = header_ptr;
-        }else{
-          if (tail_ptr == header_ptr){
-            tail_ptr = new_node;
-            header_ptr->next = tail_ptr;
-            tail_ptr->prev = header_ptr;
-          }else{
-            tail_ptr->next = new_node;
-            new_node->prev = tail_ptr;
-            tail_ptr = new_node;
-          }
-        }
-        item_nums++;
-    }else{
-        // srand(seed);
-        int idx = clock_idx;
-        int count = 0;
-        list_node* it = header_ptr;
-        while (count++ <= item_nums && it){
-            if (!it->accessed){
-              bool go_right = (it->left_key < left);
-              it->left_key = left;
-              it->right_key = right;
-              it->ptr = ptr;
-              list_node* tmp;
-              if (go_right){
-                if (it == tail_ptr) break;
-                tmp = it->next;
-                while(tmp->next && tmp->left_key < left) tmp = tmp->next;
-                // if (tmp == tail_ptr) tail_ptr = it;
-                swap(it->left_key, tmp->left_key);
-                swap(it->right_key, tmp->right_key);
-                swap(it->ptr, tmp->ptr);
-              }else{
-                if (it == header_ptr) break;
-                tmp = it->prev;
-                while(tmp->prev && tmp->left_key > left) tmp = tmp->next;
-                // if (tmp == header_ptr) header_ptr = it;
-                swap(it->left_key, tmp->left_key);
-                swap(it->right_key, tmp->right_key);
-                swap(it->ptr, tmp->ptr);
-              }
-              break;
-            }
-            it = it->next;
-            // idx++;
-            // idx = (idx+1) % item_nums;
+void updateTbl(entry_key_t left, entry_key_t right, entry_key_t key, page *ptr){
+    uint32_t hash_idx = fnv_32(key);
+    bool isValid = 0;
+    unsigned char ref = 0;
+    unsigned char min_idx = 0, min_ref = INT64_MAX;
+    hash_tbl* tbl;
+    for (int i=0; i<lines_per_tbl; i++){
+        // tbl = &content_tbl[hash_idx][i];
+        isValid = ref = content_tbl[hash_idx][i].ref;
+        if (ref < min_ref){
+          min_idx=i;
+          min_ref = ref;
         }
     }
-    min_key = header_ptr->left_key;
-    max_key = tail_ptr->right_key;
+    content_tbl[hash_idx][min_idx].left = left;
+    content_tbl[hash_idx][min_idx].right = right;
+    content_tbl[hash_idx][min_idx].ptr = ptr;
+    content_tbl[hash_idx][min_idx].ref=1;
+    min_key = min(min_key, left);
+    max_key = max(max_key, right);
     
 }
 

@@ -150,7 +150,15 @@ int main(int argc, char** argv)
     
     for(int i = 0; i < num_data; ++i) {
         bt->btree_search(uniform_keys[i]);
+        // printf("hash val: %d\n", fnv_32(uniform_keys[i]));
     }
+    // for (int i=0; i<20000; i++){
+    //     printf("hash val: %d\n", fnv_32(i));    
+    // }
+    // printf("hash val: %d\n", fnv_32(8149));
+    // printf("hash val: %d\n", fnv_32(8151));
+    // printf("hash val: %d\n", fnv_32(8450));
+    // printf("hash val: %d\n", fnv_32(8000));
     // for(int i = 0; i<num_data; ++i) {
     //     bt->btree_search(keys[i]);
     // }
