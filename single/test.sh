@@ -5,8 +5,8 @@ size=1000000
 output_file="output.txt"
 echo "FAST-FAIR" > output.txt
 ./FAST-FAIR -i $input_file -u $uniform_file -n $size >> output.txt
-echo "FAST-FAIR_bufer:"  >> output.txt
-./FAST-FAIR_content_sensitive -i $input_file -u $uniform_file -n $size >> output.txt
+#echo "FAST-FAIR_bufer:"  >> output.txt
+#./FAST-FAIR_content_sensitive -i $input_file -u $uniform_file -n $size >> output.txt
 #echo "FAST-FAIR_fp:"  >> output.txt
 #./FAST-FAIR_fp -i $input_file -n $size >> output.txt
 #echo "Circle-Tree" >> output.txt

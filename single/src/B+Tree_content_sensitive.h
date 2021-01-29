@@ -26,6 +26,7 @@
 #include <algorithm>
 #include "config.h"
 #include <cstdlib>
+#include "threadpool/threadpool.h"
 
 #define CPU_FREQ_MHZ (1566)
 #define DELAY_IN_NS (1000)
@@ -175,12 +176,12 @@ typedef struct hash_table{
     uint64_t ref = 0;  // 1B: first bit is valid bit, another 7 bits are reference counter.
 } hash_tbl;
 const uint32_t tbl_nums = 256;
-const uint32_t lines_per_tbl = 2; // word allign to 32
+const uint32_t lines_per_tbl = 4; // word allign to 32
 uint32_t item_nums = 0;  // <= 10
 uint32_t clock_idx = 0;
 int64_t min_key = INT64_MIN;
 int64_t max_key = INT64_MAX;
-hash_tbl content_tbl[tbl_nums][lines_per_tbl];  // (left key, right key), node pointer, valid bit;
+uint64_t content_tbl[tbl_nums][lines_per_tbl];  // (left key, right key), node pointer, valid bit;
 
 uint64_t ref_count = 0;
 
@@ -837,6 +838,23 @@ void btree::setNewRoot(char *new_root) {
 }
 
 
+#define SORTED_ARRAY 1
+#ifdef SORTED_ARRAY
+const int num_thread = 4;
+std::threadpool thread_pool{num_thread};
+std::future<page *> results[num_thread];
+#endif
+
+page* findKey(int begin, int end, entry_key_t key){
+    page* p = nullptr;
+    for (int i=begin; i<end; i++){
+        if (content_tbl[i][0] <= key && key < content_tbl[i][1]){
+            p = (page*) content_tbl[i][2];
+            break;
+        }
+    }
+    return p;
+}
 
 page* search_tbl(entry_key_t key){
     assert(item_nums <= tbl_nums);
@@ -846,6 +864,7 @@ page* search_tbl(entry_key_t key){
     
     if (key < min_key || key > max_key) return p;
     
+  #ifdef HASH_TBL
     uint32_t hash_idx = fnv_32(key);
     bool isValid = 0;
     hash_tbl* tbl;
@@ -861,28 +880,72 @@ page* search_tbl(entry_key_t key){
             break;
         }
     }
+    #elif SORTED_ARRAY
+    // for (int i=0; i<item_nums; i++){
+    //     if (content_tbl[i][0] <= key && key < content_tbl[i][1]){
+    //         p = (page*)content_tbl[i][2];
+    //         content_tbl[i][3] = 1;
+    //         ref_count++;
+    //         break;
+    //     }
+    // }
+    int interval = item_nums/num_thread;
+    for (int num_t=0; num_t < num_thread; num_t++){
+        results[num_t] = thread_pool.commit(findKey, num_t*interval, (num_t+1)*interval, key);
+    }
+    page* tmp = nullptr;
+    for (int num_t=0; num_t < num_thread; num_t++){
+        if (tmp = results[num_t].get()) p = tmp;
+    }
+    #endif
+
+
     return p;
 }
 void updateTbl(entry_key_t left, entry_key_t right, entry_key_t key, page *ptr){
-    uint32_t hash_idx = fnv_32(key);
-    bool isValid = 0;
-    unsigned char ref = 0;
-    unsigned char min_idx = 0, min_ref = INT64_MAX;
-    hash_tbl* tbl;
-    for (int i=0; i<lines_per_tbl; i++){
-        // tbl = &content_tbl[hash_idx][i];
-        isValid = ref = content_tbl[hash_idx][i].ref;
-        if (ref < min_ref){
-          min_idx=i;
-          min_ref = ref;
+    // uint32_t hash_idx = fnv_32(key);
+    // bool isValid = 0;
+    // unsigned char ref = 0;
+    // unsigned char min_idx = 0, min_ref = INT64_MAX;
+    // hash_tbl* tbl;
+    // for (int i=0; i<lines_per_tbl; i++){
+    //     // tbl = &content_tbl[hash_idx][i];
+    //     isValid = ref = content_tbl[hash_idx][i].ref;
+    //     if (ref < min_ref){
+    //       min_idx=i;
+    //       min_ref = ref;
+    //     }
+    // }
+    // content_tbl[hash_idx][min_idx].left = left;
+    // content_tbl[hash_idx][min_idx].right = right;
+    // content_tbl[hash_idx][min_idx].ptr = ptr;
+    // content_tbl[hash_idx][min_idx].ref=1;
+    // min_key = min(min_key, left);
+    // max_key = max(max_key, right);
+
+    if (item_nums < tbl_nums){
+        content_tbl[item_nums][0] = left;
+        content_tbl[item_nums][1] = right;
+        content_tbl[item_nums][2] = (uint64_t)ptr;
+        item_nums++;
+        clock_idx = item_nums % tbl_nums;
+    }else{
+        int count = 0;
+        for (int i=clock_idx; count<tbl_nums; count++){
+            if (content_tbl[i][3] == 0){
+                content_tbl[i][0] = left;
+                content_tbl[i][1] = right;
+                content_tbl[i][2] = (uint64_t)ptr;
+                clock_idx = (i+1) % tbl_nums;
+                break;
+            }else{
+                content_tbl[i][3] = 0;
+            }
+            i = (i+1) % tbl_nums;
         }
     }
-    content_tbl[hash_idx][min_idx].left = left;
-    content_tbl[hash_idx][min_idx].right = right;
-    content_tbl[hash_idx][min_idx].ptr = ptr;
-    content_tbl[hash_idx][min_idx].ref=1;
-    min_key = min(min_key, left);
-    max_key = max(max_key, right);
+
+    
     
 }
 
